@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -11,9 +12,7 @@ import (
 
 func TestArticle(t *testing.T) {
 	t.Run("get all", func(t *testing.T) {
-		now := time.Now()
-
-		articles := MakeFakeArticles(2, now, "Programming")
+		articles := MakeBothTypesOfArticle(20)
 
 		store := StubStore{articles: articles}
 		server := NewServer(&store)
@@ -31,78 +30,50 @@ func TestArticle(t *testing.T) {
 	})
 
 	t.Run("get pages of articles", func(t *testing.T) {
+		progWant, otherWant := MakeSeparatedArticles(20)
 
-		now := time.Now()
-
-		t.Run("with category 'Programming'", func(t *testing.T) {
-			articles := MakeFakeArticles(20, now, "Programming")
-
-			store := StubStore{articles: articles}
-			server := NewServer(&store)
-
-			cases := []struct {
-				path string
-				want []Article
-			}{
-				{"/page/1", articles[:perPage]},
-				{"/page/2", articles[len(articles)-perPage : len(articles)]},
-				{"/page/-5", articles[:perPage]},
-				{"/", articles[:perPage]},
-				{"/page/9999", articles[len(articles)-perPage : len(articles)]},
-				{"/page/abc", articles[:perPage]},
-			}
-
-			for _, c := range cases {
-				resp := httptest.NewRecorder()
-				req := newGetRequest(t, c.path)
-
-				server.ServeHTTP(resp, req)
-
-				for _, a := range c.want {
-					assertContains(t, resp.Body.String(), a.Title)
-				}
-			}
-		})
-
-		t.Run("with category 'Other'", func(t *testing.T) {
-			articles := MakeFakeArticles(20, now, "Other")
-
-			store := StubStore{articles: articles}
-			server := NewServer(&store)
-
-			cases := []struct {
-				path string
-				want []Article
-			}{
-				{"/other/page/1", articles[:perPage]},
-				{"/other/page/2", articles[len(articles)-perPage : len(articles)]},
-				{"/other/page/-5", articles[:perPage]},
-				{"/other", articles[:perPage]},
-				{"/other/page/9999", articles[len(articles)-perPage : len(articles)]},
-				{"/other/page/abc", articles[:perPage]},
-			}
-
-			for _, c := range cases {
-				resp := httptest.NewRecorder()
-				req := newGetRequest(t, c.path)
-
-				server.ServeHTTP(resp, req)
-
-				for _, a := range c.want {
-					assertContains(t, resp.Body.String(), a.Title)
-				}
-			}
-		})
-	})
-
-	t.Run("get view page of single article", func(t *testing.T) {
-		now := time.Now()
-
-		articles := MakeFakeArticles(10, now, "Programming")
+		articles := append(progWant, otherWant...)
 
 		store := StubStore{articles: articles}
 		server := NewServer(&store)
 
+		cases := []struct {
+			path string
+			want []Article
+		}{
+			{"/", progWant[:perPage]},
+			{"/page/1", progWant[:perPage]},
+			{"/page/2", progWant[len(progWant)-perPage : len(progWant)]},
+			{"/page/-5", progWant[:perPage]},
+			{"/page/9999", progWant[len(progWant)-perPage : len(progWant)]},
+			{"/page/abc", progWant[:perPage]},
+			{"/other", otherWant[:perPage]},
+			{"/other/page/1", otherWant[:perPage]},
+			{"/other/page/2", otherWant[len(otherWant)-perPage : len(otherWant)]},
+			{"/other/page/-5", otherWant[:perPage]},
+			{"/other/page/9999", otherWant[len(otherWant)-perPage : len(otherWant)]},
+			{"/other/page/abc", otherWant[:perPage]},
+		}
+
+		for _, c := range cases {
+			resp := httptest.NewRecorder()
+			req := newGetRequest(t, c.path)
+
+			server.ServeHTTP(resp, req)
+
+			for _, a := range c.want {
+				assertContains(t, resp.Body.String(), a.Title)
+			}
+		}
+	})
+
+	t.Run("get view page of single article", func(t *testing.T) {
+		articles := MakeArticlesOfCategory(10, time.Now(), progCat)
+
+		store := StubStore{articles: articles}
+		server := NewServer(&store)
+
+		// Valid article
 		resp := httptest.NewRecorder()
 		req := newGetRequest(t, "/article-1")
 
@@ -122,6 +93,87 @@ func TestArticle(t *testing.T) {
 }
 
 // Integration test
+func TestIntegration(t *testing.T) {
+	t.Run("get all", func(t *testing.T) {
+		articles := MakeBothTypesOfArticle(20)
+
+		store := InMemStore{articles: articles}
+		server := NewServer(&store)
+
+		resp := httptest.NewRecorder()
+		req := newGetRequest(t, "/all")
+
+		server.ServeHTTP(resp, req)
+
+		assertStatus(t, resp.Code, 200)
+
+		for _, v := range articles {
+			assertContains(t, resp.Body.String(), v.Title)
+		}
+	})
+
+	t.Run("get pages of articles", func(t *testing.T) {
+		progWant, otherWant := MakeSeparatedArticles(20)
+
+		articles := append(progWant, otherWant...)
+
+		store := InMemStore{articles: articles}
+		server := NewServer(&store)
+
+		cases := []struct {
+			path string
+			want []Article
+		}{
+			{"/", progWant[:perPage]},
+			{"/page/1", progWant[:perPage]},
+			{"/page/2", progWant[len(progWant)-perPage : len(progWant)]},
+			{"/page/-5", progWant[:perPage]},
+			{"/page/9999", progWant[len(progWant)-perPage : len(progWant)]},
+			{"/page/abc", progWant[:perPage]},
+			{"/other", otherWant[:perPage]},
+			{"/other/page/1", otherWant[:perPage]},
+			{"/other/page/2", otherWant[len(otherWant)-perPage : len(otherWant)]},
+			{"/other/page/-5", otherWant[:perPage]},
+			{"/other/page/9999", otherWant[len(otherWant)-perPage : len(otherWant)]},
+			{"/other/page/abc", otherWant[:perPage]},
+		}
+
+		for _, c := range cases {
+			resp := httptest.NewRecorder()
+			req := newGetRequest(t, c.path)
+
+			server.ServeHTTP(resp, req)
+
+			for _, a := range c.want {
+				assertContains(t, resp.Body.String(), a.Title)
+			}
+		}
+	})
+
+	t.Run("get view page of single article", func(t *testing.T) {
+		articles := MakeArticlesOfCategory(10, time.Now(), progCat)
+
+		store := InMemStore{articles: articles}
+		server := NewServer(&store)
+
+		// Valid article
+		resp := httptest.NewRecorder()
+		req := newGetRequest(t, "/article-1")
+
+		server.ServeHTTP(resp, req)
+
+		assertStatus(t, resp.Code, 200)
+		assertContains(t, resp.Body.String(), "Programming Article 1")
+
+		// Non-existent article
+		resp = httptest.NewRecorder()
+		req = newGetRequest(t, "/does-not-exist")
+
+		server.ServeHTTP(resp, req)
+
+		assertStatus(t, resp.Code, 404)
+	})
+}
 
 type StubStore struct {
 	articles []Article
@@ -131,21 +183,33 @@ func (s *StubStore) getAll() []Article {
 	return s.articles
 }
 
-func (s *StubStore) getPage(page int) []Article {
+func (s *StubStore) getPage(page int, category string) []Article {
+	var filtered []Article
+
+	for _, a := range s.getAll() {
+		if a.Category == category {
+			filtered = append(filtered, a)
+		}
+	}
+
+	sort.Slice(filtered, func(i int, j int) bool {
+		return filtered[i].Published.Before(filtered[j].Published)
+	})
+
 	p := page
 	if page < 1 {
 		p = 1
 	}
-	maxPage := (len(s.articles) / perPage)
+	maxPage := (len(filtered) / perPage)
 	if page > maxPage {
 		p = maxPage
 	}
 	endArticle := (p * perPage) - 1
-	if len(s.articles) < endArticle {
-		endArticle = len(s.articles)
+	if len(filtered) < endArticle {
+		endArticle = len(filtered)
 	}
 
-	articles := s.articles[(p-1)*perPage : endArticle+1]
+	articles := filtered[(p-1)*perPage : endArticle+1]
 	return articles
 }
 
@@ -165,6 +229,16 @@ func newGetRequest(t *testing.T, path string) *http.Request {
 		t.Errorf("Failed to make new GET request, %s", err)
 	}
 	return req
+}
+
+func MakeSeparatedArticles(n int) (progWant []Article, otherWant []Article) {
+	for i := 1; i <= n; i++ {
+		progWant = append(progWant, MakeArticleOfCategory(i, time.Now(), progCat))
+	}
+	for i := 1; i <= n; i++ {
+		otherWant = append(otherWant, MakeArticleOfCategory(i, time.Now(), otherCat))
+	}
+	return
 }
 
 func assertArticles(t *testing.T, got, want []Article) {

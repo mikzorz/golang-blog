@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -17,9 +18,7 @@ const otherCat = "Other"
 var perPage = 10
 
 func main() {
-	now := time.Now()
-	fakes := MakeFakeArticles(10, now, progCat)
-	fakes = append(fakes, MakeFakeArticles(10, now, otherCat)...)
+	fakes := MakeBothTypesOfArticle(20)
 
 	store := InMemStore{fakes}
 	server := NewServer(&store)
@@ -41,7 +40,7 @@ type Article struct {
 
 type Store interface {
 	getAll() []Article
-	getPage(int) []Article
+	getPage(int, string) []Article
 	getArticle(string) Article
 }
 
@@ -50,14 +49,45 @@ type InMemStore struct {
 }
 
 func (i *InMemStore) getAll() []Article {
-	return []Article{}
+	return i.articles
 }
 
-func (i *InMemStore) getPage(page int) []Article {
-	return []Article{}
+func (i *InMemStore) getPage(page int, category string) []Article {
+	var filtered []Article
+
+	for _, a := range i.getAll() {
+		if a.Category == category {
+			filtered = append(filtered, a)
+		}
+	}
+
+	sort.Slice(filtered, func(i int, j int) bool {
+		return filtered[i].Published.Before(filtered[j].Published)
+	})
+
+	p := page
+	if page < 1 {
+		p = 1
+	}
+	maxPage := (len(filtered) / perPage)
+	if page > maxPage {
+		p = maxPage
+	}
+	endArticle := (p * perPage) - 1
+	if len(filtered) < endArticle {
+		endArticle = len(filtered)
+	}
+
+	articles := filtered[(p-1)*perPage : endArticle+1]
+	return articles
 }
 
 func (i *InMemStore) getArticle(slug string) Article {
+	for _, a := range i.articles {
+		if a.Slug == slug {
+			return a
+		}
+	}
 	return Article{}
 }
 
@@ -93,7 +123,7 @@ func (s *Server) MainIndexPage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		pageInt = 1
 	}
-	articles := s.store.getPage(pageInt)
+	articles := s.store.getPage(pageInt, progCat)
 	fmt.Fprintf(w, "main index, page %s \n", page)
 	fmt.Fprint(w, articles)
 }
@@ -108,7 +138,7 @@ func (s *Server) OtherIndexPage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		pageInt = 1
 	}
-	articles := s.store.getPage(pageInt)
+	articles := s.store.getPage(pageInt, otherCat)
 	fmt.Fprintf(w, "other index, page %s", page)
 	fmt.Fprint(w, articles)
 }
@@ -131,7 +161,16 @@ func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func MakeFakeArticles(amount int, now time.Time, category string) []Article {
+func MakeBothTypesOfArticle(n int) []Article {
+	var articles []Article
+	for i := 1; i <= n; i++ {
+		articles = append(articles, MakeArticleOfCategory(i, time.Now(), progCat))
+		articles = append(articles, MakeArticleOfCategory(i, time.Now(), otherCat))
+	}
+	return articles
+}
+
+func MakeArticlesOfCategory(amount int, now time.Time, category string) []Article {
 	ret := []Article{}
 	for i := 0; i < amount; i++ {
 		art := Article{
@@ -140,8 +179,20 @@ func MakeFakeArticles(amount int, now time.Time, category string) []Article {
 			Slug:      "article-" + strconv.Itoa(i),
 			Published: now,
 			Edited:    now,
-			Category:  category}
+			Category:  category,
+		}
 		ret = append(ret, art)
 	}
 	return ret
+}
+
+func MakeArticleOfCategory(i int, now time.Time, category string) Article {
+	return Article{
+		Title:     category + " Article " + strconv.Itoa(i),
+		Body:      "Test Article " + strconv.Itoa(i),
+		Slug:      "article-" + strconv.Itoa(i),
+		Published: now,
+		Edited:    now,
+		Category:  category,
+	}
 }

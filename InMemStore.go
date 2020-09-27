@@ -10,7 +10,7 @@ func (i *InMemStore) getAll() []Article {
 	return i.articles
 }
 
-func (i *InMemStore) getPage(page int, category string) []Article {
+func (i *InMemStore) getPage(page int, category string) ([]Article, int, int) {
 	var filtered []Article
 
 	for _, a := range i.getAll() {
@@ -37,7 +37,7 @@ func (i *InMemStore) getPage(page int, category string) []Article {
 	}
 
 	articles := filtered[(p-1)*perPage : endArticle+1]
-	return articles
+	return articles, p, maxPage
 }
 
 func (i *InMemStore) getArticle(slug string) Article {

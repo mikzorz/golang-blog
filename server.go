@@ -2,25 +2,38 @@ package main
 
 import (
 	"fmt"
+	"html/template"
+	"log"
 	"net/http"
+	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
 )
 
 type Article struct {
-	Title     string
-	Body      string
-	Slug      string
-	Published time.Time
-	Edited    time.Time
-	Category  string
+	Title              string
+	Body               string
+	Slug               string
+	Published          time.Time
+	Edited             time.Time
+	FormattedPublished string
+	FormattedEdited    string
+	Category           string
+}
+
+type PageInfo struct {
+	CurrentPage int
+	MaxPage     int
+	Next        int
+	Prev        int
 }
 
 type Store interface {
 	getAll() []Article
-	getPage(int, string) []Article
+	getPage(int, string) ([]Article, int, int)
 	getArticle(string) Article
 }
 
@@ -34,6 +47,8 @@ func NewServer(store Store) *Server {
 	s.store = store
 
 	r := mux.NewRouter()
+	// r.PathPrefix("/static/css/").Handler(http.StripPrefix("/static/css/", http.FileServer(http.Dir(path.Join(base, "/static/css")))))
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(path.Join(base, "/static")))))
 
 	r.HandleFunc("/", s.MainIndexPage).Methods("GET")
 	r.HandleFunc("/page/{page}", s.MainIndexPage).Methods("GET")
@@ -47,38 +62,54 @@ func NewServer(store Store) *Server {
 }
 
 func (s *Server) MainIndexPage(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	page, ok := vars["page"]
-	if !ok {
-		page = "1"
+	articles, page, maxPage := s.store.getPage(getPageNumber(r), progCat)
+
+	// Reload HTML without rebuilding project.
+	if DEV {
+		indexTemplate = setIndexTemplate()
 	}
-	pageInt, err := strconv.Atoi(page)
-	if err != nil {
-		pageInt = 1
-	}
-	articles := s.store.getPage(pageInt, progCat)
-	fmt.Fprintf(w, "main index, page %s \n", page)
-	fmt.Fprint(w, articles)
+	tmpl := indexTemplate
+	tmpl.Execute(w, struct {
+		Articles []Article
+		Category string
+		PageInfo PageInfo
+	}{articles, progCat, makePageInfoObject(page, maxPage)})
 }
 
 func (s *Server) OtherIndexPage(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	page, ok := vars["page"]
-	if !ok {
-		page = "1"
+	articles, page, maxPage := s.store.getPage(getPageNumber(r), otherCat)
+
+	// Reload HTML without rebuilding project.
+	if DEV {
+		indexTemplate = setIndexTemplate()
 	}
-	pageInt, err := strconv.Atoi(page)
-	if err != nil {
-		pageInt = 1
-	}
-	articles := s.store.getPage(pageInt, otherCat)
-	fmt.Fprintf(w, "other index, page %s", page)
-	fmt.Fprint(w, articles)
+	tmpl := indexTemplate
+	tmpl.Execute(w, struct {
+		Articles []Article
+		Category string
+		PageInfo PageInfo
+	}{articles, otherCat, makePageInfoObject(page, maxPage)})
 }
 
 func (s *Server) All(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(200)
-	fmt.Fprintf(w, "all - %v", s.store.getAll())
+
+	// Get articles, then split them into columns.
+	articles := s.store.getAll()
+
+	// Reload HTML without rebuilding project.
+	if DEV {
+		indexTemplate = setIndexTemplate()
+	}
+	tmpl := indexTemplate
+	err := tmpl.Execute(w, struct {
+		Column1  []Article
+		Column2  []Article
+		Category string
+	}{articles[:len(articles)/2], articles[len(articles)/2:], ""})
+	if err != nil {
+		log.Printf("%s", err)
+	}
 }
 
 func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {
@@ -86,12 +117,27 @@ func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {
 	slug := vars["slug"]
 	article := s.store.getArticle(slug)
 	if article != (Article{}) {
-		fmt.Fprintf(w, "article view: %s", slug)
-		fmt.Fprint(w, article)
+		tmpl := template.Must(template.ParseFiles("static/templates/base.html", "static/templates/nav.html", "static/templates/article.html"))
+		tmpl, _ = tmpl.Parse("{{define \"body\"}}" + article.Body + "{{end}}")
+
+		tmpl.Execute(w, struct{ Article Article }{article})
 	} else {
 		w.WriteHeader(404)
-		fmt.Fprintf(w, "article view: %s", slug)
+		fmt.Fprint(w, "404 not found")
 	}
+}
+
+func getPageNumber(r *http.Request) int {
+	vars := mux.Vars(r)
+	page, ok := vars["page"]
+	if !ok {
+		page = "1"
+	}
+	pageInt, err := strconv.Atoi(page)
+	if err != nil {
+		pageInt = 1
+	}
+	return pageInt
 }
 
 func MakeBothTypesOfArticle(n int) []Article {
@@ -107,12 +153,14 @@ func MakeArticlesOfCategory(amount int, now time.Time, category string) []Articl
 	ret := []Article{}
 	for i := 0; i < amount; i++ {
 		art := Article{
-			Title:     category + " Article " + strconv.Itoa(i),
-			Body:      "Test Article " + strconv.Itoa(i),
-			Slug:      "article-" + strconv.Itoa(i),
-			Published: now,
-			Edited:    now,
-			Category:  category,
+			Title:              category + " Article " + strconv.Itoa(i),
+			Body:               "Test Article " + strconv.Itoa(i),
+			Slug:               strings.ToLower(category) + "-article-" + strconv.Itoa(i),
+			Published:          now.UTC(),
+			Edited:             now.UTC(),
+			FormattedPublished: myDateFormat(now.UTC()),
+			FormattedEdited:    myDateFormat(now.UTC()),
+			Category:           category,
 		}
 		ret = append(ret, art)
 	}
@@ -120,12 +168,48 @@ func MakeArticlesOfCategory(amount int, now time.Time, category string) []Articl
 }
 
 func MakeArticleOfCategory(i int, now time.Time, category string) Article {
-	return Article{
-		Title:     category + " Article " + strconv.Itoa(i),
-		Body:      "Test Article " + strconv.Itoa(i),
-		Slug:      "article-" + strconv.Itoa(i),
-		Published: now,
-		Edited:    now,
-		Category:  category,
+	ret := Article{
+		Title: category + " Article " + strconv.Itoa(i),
+		Body: `<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.</p>
+		<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.</p>
+		<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.</p>`,
+		Slug:               strings.ToLower(category) + "-article-" + strconv.Itoa(i),
+		Published:          now.UTC(),
+		Edited:             now.UTC(),
+		FormattedPublished: myDateFormat(now.UTC()),
+		FormattedEdited:    myDateFormat(now.UTC()),
+		Category:           category,
 	}
+	return ret
+}
+
+func makePageInfoObject(page, maxPage int) PageInfo {
+	return PageInfo{page, maxPage, page + 1, page - 1}
+}
+
+func setIndexTemplate() *template.Template {
+	return template.Must(template.ParseFiles("static/templates/base.html", "static/templates/nav.html", "static/templates/index.html"))
+}
+
+func myDateFormat(t time.Time) string {
+	year, month, day := t.Date()
+	dateString := strconv.Itoa(year) + "-" + fmt.Sprintf("%02d", int(month)) + "-" + strconv.Itoa(day)
+	return dateString
+}
+
+// I made these, thinking that they would reduce the amount of data sent to the user.
+// Then I realized that everything is rendered server-side.
+// If it's not rendered in the template, it isn't being sent...
+func articlesWithoutBodies(articles []Article) []Article {
+	ret := make([]Article, len(articles))
+	for i, a := range articles {
+		ret[i] = articleWithoutBody(a)
+	}
+	return ret
+}
+
+func articleWithoutBody(a Article) Article {
+	ret := a
+	ret.Body = ""
+	return ret
 }

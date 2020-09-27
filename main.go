@@ -3,8 +3,14 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 )
+
+const DEV = true
+
+var base = os.Getenv("GOPATH") + "/src/github.com/mikzorz/blog"
+var indexTemplate = setIndexTemplate()
 
 const port = 3000
 const progCat = "Programming"
@@ -13,7 +19,7 @@ const otherCat = "Other"
 var perPage = 10
 
 func main() {
-	fakes := MakeBothTypesOfArticle(20)
+	fakes := MakeBothTypesOfArticle(100)
 
 	store := InMemStore{fakes}
 	server := NewServer(&store)

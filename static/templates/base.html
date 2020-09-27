@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{template "title" .}}</title>
+    <link rel="stylesheet" href="/static/css/bulma.min.css" type="text/css" />
+  </head>
+  <body class="has-background-white-bis">
+  {{template "nav"}}
+  <div style="background-image:url('/static/temp-pattern-small.jpg'); height: 50px; background-position: center; background-repeat: repeat;">
+  </div>
+  <section class="section">
+    <div class="container">
+      {{template "main" .}}
+    </div>
+  </section>
+  <footer class="footer has-background-black-ter has-text-grey">
+    <div class="content columns has-text-centered">
+      <div class="column">
+        <p>RSS:</p>
+        <p>All Articles</p>
+        <p>Programming</p>
+        <p>Other Articles</p>
+      </div>
+      <div class="column">
+        <p>
+          Made with <a class="has-text-info">Golang</a> and <a class="has-text-primary">Bulma</a>
+        </p>
+      </div>
+    </div>
+  </footer>
+  </body>
+</html>

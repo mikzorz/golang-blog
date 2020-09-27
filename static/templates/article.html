@@ -1,0 +1,17 @@
+{{define "title"}}
+{{.Article.Title}}
+{{end}}
+
+{{define "main"}}{{$a := .Article}}<article class="content">
+        <div class="content columns">
+          <div class="column is-8 is-offset-2">
+          <h1 class="title">{{$a.Title}}</h1>
+          {{if eq $a.FormattedPublished $a.FormattedEdited}}
+          <p class="is-size-6">{{$a.FormattedPublished}}</p>
+          {{else}}
+          <p class="is-size-6">{{$a.FormattedEdited}}</p>
+          {{end}}
+          {{template "body"}}
+          </div>
+        </div>
+      </article>{{end}}

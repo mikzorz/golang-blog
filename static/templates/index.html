@@ -1,0 +1,82 @@
+{{define "title"}}{{.Category}} Index{{end}}
+
+{{define "main"}}
+      <div class="columns">
+        <div class="column is-10 is-offset-1">
+          <h1 class="title">{{.Category}} Index</h1>
+          {{if ne .Category ""}}
+          {{template "index-pagination" .}}
+          {{ range .Articles }}
+          <article class="message">
+            <a href="/{{.Slug}}" style="border-bottom: 1px solid #ddd; margin-bottom: 0; text-decoration: none;">
+              <div class="message-header">
+                <p class="is-size-4">{{.Title}}</p>
+              </div>
+              <div class="message-body">
+                <!-- This will be a short-description, hasn't been added to Article struct yet. -->
+                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.</p>
+
+                {{if eq .FormattedPublished .FormattedEdited}}
+                <br>
+                <p class="is-size-6 tag is-white">Published: {{.FormattedPublished}}</p>
+                {{else}}
+                <br>
+                <p class="is-size-6 tag is-white">Last Edited: {{.FormattedEdited}}</p>
+                {{end}}
+              </div>
+            </a>
+          </article>
+          {{ end }}
+        {{else}}
+          <div class="columns">
+            <div class="column" style="border-right: 1px solid #ddd">
+              {{ range .Column1 }}
+              <a href="/{{.Slug}}">
+                <p class="level is-mobile">
+                  <span class="is-size-6 level-left">{{.Title}}</span>
+                  <span class="is-size-6 level-right">{{.FormattedPublished}}</span>
+                </p>
+              </a>
+              {{end}}
+            </div>
+            <div class="column" style="border-right: 1px solid #ddd">
+              {{ range .Column2 }}
+              <a href="/{{.Slug}}">
+                <p class="level is-mobile">
+                  <span class="is-size-6 level-left">{{.Title}}</span>
+                  <span class="is-size-6 level-right">{{.FormattedPublished}}</span>
+                </p>
+              </a>
+              {{end}}
+            </div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+{{end}}
+
+{{define "index-pagination"}}{{$curPage := .PageInfo.CurrentPage}}{{$maxPage := .PageInfo.MaxPage}}
+          <nav class="pagination" role="navigation" aria-label="pagination">
+            <ul class="pagination-list">
+              <li>
+                <a href="/page/1" class="pagination-link {{if eq $curPage 1}}is-current{{end}}" aria-label="Go to page 1">1</a>
+              </li>
+              <li>
+                <span class="pagination-ellipsis">&hellip;</span>
+              </li>
+              {{if and (ne $curPage 1) (ne $curPage $maxPage)}}
+              <li>
+                <a href="/page/{{$curPage}}" class="pagination-link is-current" aria-label="Go to page {{$curPage}}">{{$curPage}}</a>
+              </li>
+              <li>
+                <span class="pagination-ellipsis">&hellip;</span>
+              </li>
+              {{end}}
+              <li>
+                <a href="/page/{{$maxPage}}" class="pagination-link {{if eq $curPage $maxPage}}is-current{{end}}" aria-label="Go to page {{$maxPage}}">{{$maxPage}}</a>
+              </li>
+            </ul>
+            <a {{if ne $curPage 1}}href="/page/{{.PageInfo.Prev}}"{{end}} class="pagination-previous" {{if eq $curPage 1}}disabled{{end}}>&larr;</a>
+            <a {{if ne $curPage $maxPage}}href="/page/{{.PageInfo.Next}}"{{end}} class="pagination-next" {{if eq $curPage $maxPage}}disabled{{end}}>&rarr;</a>
+          </nav>
+{{end}}

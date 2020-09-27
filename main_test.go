@@ -24,8 +24,8 @@ func TestArticle(t *testing.T) {
 
 		assertStatus(t, resp.Code, 200)
 
-		for _, v := range articles {
-			assertContains(t, resp.Body.String(), v.Title)
+		for _, a := range articles {
+			assertContains(t, resp.Body.String(), a.Title)
 		}
 	})
 
@@ -75,7 +75,7 @@ func TestArticle(t *testing.T) {
 
 		// Valid article
 		resp := httptest.NewRecorder()
-		req := newGetRequest(t, "/article-1")
+		req := newGetRequest(t, "/programming-article-1")
 
 		server.ServeHTTP(resp, req)
 
@@ -158,7 +158,7 @@ func TestIntegration(t *testing.T) {
 
 		// Valid article
 		resp := httptest.NewRecorder()
-		req := newGetRequest(t, "/article-1")
+		req := newGetRequest(t, "/programming-article-1")
 
 		server.ServeHTTP(resp, req)
 
@@ -183,7 +183,7 @@ func (s *StubStore) getAll() []Article {
 	return s.articles
 }
 
-func (s *StubStore) getPage(page int, category string) []Article {
+func (s *StubStore) getPage(page int, category string) ([]Article, int, int) {
 	var filtered []Article
 
 	for _, a := range s.getAll() {
@@ -210,7 +210,7 @@ func (s *StubStore) getPage(page int, category string) []Article {
 	}
 
 	articles := filtered[(p-1)*perPage : endArticle+1]
-	return articles
+	return articles, p, maxPage
 }
 
 func (s *StubStore) getArticle(slug string) Article {

@@ -15,6 +15,7 @@ import (
 
 type Article struct {
 	Title              string
+	Preview            string
 	Body               string
 	Slug               string
 	Published          time.Time
@@ -149,6 +150,7 @@ func MakeBothTypesOfArticle(n int) []Article {
 	return articles
 }
 
+// Only used in tests. Should probably move to test file.
 func MakeArticlesOfCategory(amount int, now time.Time, category string) []Article {
 	ret := []Article{}
 	for i := 0; i < amount; i++ {
@@ -169,7 +171,8 @@ func MakeArticlesOfCategory(amount int, now time.Time, category string) []Articl
 
 func MakeArticleOfCategory(i int, now time.Time, category string) Article {
 	ret := Article{
-		Title: category + " Article " + strconv.Itoa(i),
+		Title:   category + " Article " + strconv.Itoa(i),
+		Preview: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.",
 		Body: `<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.</p>
 		<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.</p>
 		<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.</p>`,

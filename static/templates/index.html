@@ -13,9 +13,7 @@
                 <p class="is-size-4">{{.Title}}</p>
               </div>
               <div class="message-body">
-                <!-- This will be a short-description, hasn't been added to Article struct yet. -->
-                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.</p>
-
+                <p>{{.Preview}}</p>
                 {{if eq .FormattedPublished .FormattedEdited}}
                 <br>
                 <p class="is-size-6 tag is-white">Published: {{.FormattedPublished}}</p>

@@ -92,88 +92,121 @@ func TestArticle(t *testing.T) {
 	})
 }
 
-// Integration test
-func TestIntegration(t *testing.T) {
-	t.Run("get all", func(t *testing.T) {
+// Store test
+func TestFileSystemStore(t *testing.T) {
+	t.Run("load store", func(t *testing.T) {
+		// Not done
+	})
+
+	t.Run("new store", func(t *testing.T) {
+		tmpFile, cleanTempFile := makeTempFile()
+		defer cleanTempFile()
+
 		articles := MakeBothTypesOfArticle(20)
+		store, closeDB := NewFileSystemStore(tmpFile, articles)
+		defer closeDB()
 
-		store := InMemStore{articles: articles}
-		server := NewServer(&store)
+		t.Run("get all", func(t *testing.T) {
+			got := store.getAll()
+			assertArticles(t, got, articles)
+		})
 
-		resp := httptest.NewRecorder()
-		req := newGetRequest(t, "/all")
-
-		server.ServeHTTP(resp, req)
-
-		assertStatus(t, resp.Code, 200)
-
-		for _, v := range articles {
-			assertContains(t, resp.Body.String(), v.Title)
-		}
-	})
-
-	t.Run("get pages of articles", func(t *testing.T) {
-		progWant, otherWant := MakeSeparatedArticles(20)
-
-		articles := append(progWant, otherWant...)
-
-		store := InMemStore{articles: articles}
-		server := NewServer(&store)
-
-		cases := []struct {
-			path string
-			want []Article
-		}{
-			{"/", progWant[:perPage]},
-			{"/page/1", progWant[:perPage]},
-			{"/page/2", progWant[len(progWant)-perPage : len(progWant)]},
-			{"/page/-5", progWant[:perPage]},
-			{"/page/9999", progWant[len(progWant)-perPage : len(progWant)]},
-			{"/page/abc", progWant[:perPage]},
-			{"/other", otherWant[:perPage]},
-			{"/other/page/1", otherWant[:perPage]},
-			{"/other/page/2", otherWant[len(otherWant)-perPage : len(otherWant)]},
-			{"/other/page/-5", otherWant[:perPage]},
-			{"/other/page/9999", otherWant[len(otherWant)-perPage : len(otherWant)]},
-			{"/other/page/abc", otherWant[:perPage]},
-		}
-
-		for _, c := range cases {
-			resp := httptest.NewRecorder()
-			req := newGetRequest(t, c.path)
-
-			server.ServeHTTP(resp, req)
-
-			for _, a := range c.want {
-				assertContains(t, resp.Body.String(), a.Title)
-			}
-		}
-	})
-
-	t.Run("get view page of single article", func(t *testing.T) {
-		articles := MakeArticlesOfCategory(10, time.Now(), progCat)
-
-		store := InMemStore{articles: articles}
-		server := NewServer(&store)
-
-		// Valid article
-		resp := httptest.NewRecorder()
-		req := newGetRequest(t, "/programming-article-1")
-
-		server.ServeHTTP(resp, req)
-
-		assertStatus(t, resp.Code, 200)
-		assertContains(t, resp.Body.String(), "Programming Article 1")
-
-		// Non-existent article
-		resp = httptest.NewRecorder()
-		req = newGetRequest(t, "/does-not-exist")
-
-		server.ServeHTTP(resp, req)
-
-		assertStatus(t, resp.Code, 404)
+		// t.Run("get page", func(t *testing.T) {
+		// 	got, p, mxP := store.getPage(1, progCat)
+		// 	_, _, _ = got, p, mxP
+		// 	t.Error("temp")
+		// })
+		//
+		// t.Run("get single article", func(t *testing.T) {
+		// 	got := store.getArticle("programming-article-1")
+		// 	_ = got
+		// 	t.Error("temp")
+		// })
 	})
 }
+
+// Integration test
+// func TestIntegration(t *testing.T) {
+// 	t.Run("get all", func(t *testing.T) {
+// 		articles := MakeBothTypesOfArticle(20)
+//
+// 		store := NewFileSystemStore(articles)
+// 		server := NewServer(store)
+//
+// 		resp := httptest.NewRecorder()
+// 		req := newGetRequest(t, "/all")
+//
+// 		server.ServeHTTP(resp, req)
+//
+// 		assertStatus(t, resp.Code, 200)
+//
+// 		for _, v := range articles {
+// 			assertContains(t, resp.Body.String(), v.Title)
+// 		}
+// 	})
+//
+// 	t.Run("get pages of articles", func(t *testing.T) {
+// 		progWant, otherWant := MakeSeparatedArticles(20)
+//
+// 		articles := append(progWant, otherWant...)
+//
+// 		store := NewFileSystemStore(articles)
+// 		server := NewServer(store)
+//
+// 		cases := []struct {
+// 			path string
+// 			want []Article
+// 		}{
+// 			{"/", progWant[:perPage]},
+// 			{"/page/1", progWant[:perPage]},
+// 			{"/page/2", progWant[len(progWant)-perPage : len(progWant)]},
+// 			{"/page/-5", progWant[:perPage]},
+// 			{"/page/9999", progWant[len(progWant)-perPage : len(progWant)]},
+// 			{"/page/abc", progWant[:perPage]},
+// 			{"/other", otherWant[:perPage]},
+// 			{"/other/page/1", otherWant[:perPage]},
+// 			{"/other/page/2", otherWant[len(otherWant)-perPage : len(otherWant)]},
+// 			{"/other/page/-5", otherWant[:perPage]},
+// 			{"/other/page/9999", otherWant[len(otherWant)-perPage : len(otherWant)]},
+// 			{"/other/page/abc", otherWant[:perPage]},
+// 		}
+//
+// 		for _, c := range cases {
+// 			resp := httptest.NewRecorder()
+// 			req := newGetRequest(t, c.path)
+//
+// 			server.ServeHTTP(resp, req)
+//
+// 			for _, a := range c.want {
+// 				assertContains(t, resp.Body.String(), a.Title)
+// 			}
+// 		}
+// 	})
+//
+// 	t.Run("get view page of single article", func(t *testing.T) {
+// 		articles := MakeArticlesOfCategory(10, time.Now(), progCat)
+//
+// 		store := NewFileSystemStore(articles)
+// 		server := NewServer(store)
+//
+// 		// Valid article
+// 		resp := httptest.NewRecorder()
+// 		req := newGetRequest(t, "/programming-article-1")
+//
+// 		server.ServeHTTP(resp, req)
+//
+// 		assertStatus(t, resp.Code, 200)
+// 		assertContains(t, resp.Body.String(), "Programming Article 1")
+//
+// 		// Non-existent article
+// 		resp = httptest.NewRecorder()
+// 		req = newGetRequest(t, "/does-not-exist")
+//
+// 		server.ServeHTTP(resp, req)
+//
+// 		assertStatus(t, resp.Code, 404)
+// 	})
+// }
 
 type StubStore struct {
 	articles []Article
@@ -193,7 +226,7 @@ func (s *StubStore) getPage(page int, category string) ([]Article, int, int) {
 	}
 
 	sort.Slice(filtered, func(i int, j int) bool {
-		return filtered[i].Published.Before(filtered[j].Published)
+		return myStringToTime(filtered[i].Published).Before(myStringToTime(filtered[j].Published))
 	})
 
 	p := page
@@ -244,7 +277,9 @@ func MakeSeparatedArticles(n int) (progWant []Article, otherWant []Article) {
 func assertArticles(t *testing.T, got, want []Article) {
 	t.Helper()
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("article slice doesn't match, want %v, got %v", got, want)
+		// Very ugly logs.
+		// t.Errorf("article slice doesn't match, got %v, want %v", got, want)
+		t.Errorf("article slice doesn't match, got %v", got)
 	}
 }
 
@@ -258,6 +293,7 @@ func assertStatus(t *testing.T, got, want int) {
 func assertContains(t *testing.T, got, want string) {
 	t.Helper()
 	if !strings.Contains(got, want) {
-		t.Errorf("%s does not contain %s", got, want)
+		// t.Errorf("%s does not contain %s", got, want)
+		t.Errorf("want %s", want)
 	}
 }

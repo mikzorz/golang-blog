@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -14,15 +16,13 @@ import (
 )
 
 type Article struct {
-	Title              string
-	Preview            string
-	Body               string
-	Slug               string
-	Published          time.Time
-	Edited             time.Time
-	FormattedPublished string
-	FormattedEdited    string
-	Category           string
+	Title     string
+	Preview   string
+	Body      string
+	Slug      string
+	Published string
+	Edited    string
+	Category  string
 }
 
 type PageInfo struct {
@@ -155,14 +155,12 @@ func MakeArticlesOfCategory(amount int, now time.Time, category string) []Articl
 	ret := []Article{}
 	for i := 0; i < amount; i++ {
 		art := Article{
-			Title:              category + " Article " + strconv.Itoa(i),
-			Body:               "Test Article " + strconv.Itoa(i),
-			Slug:               strings.ToLower(category) + "-article-" + strconv.Itoa(i),
-			Published:          now.UTC(),
-			Edited:             now.UTC(),
-			FormattedPublished: myDateFormat(now.UTC()),
-			FormattedEdited:    myDateFormat(now.UTC()),
-			Category:           category,
+			Title:     category + " Article " + strconv.Itoa(i),
+			Body:      "Test Article " + strconv.Itoa(i),
+			Slug:      strings.ToLower(category) + "-article-" + strconv.Itoa(i),
+			Published: myTimeToString(now.UTC().Add(time.Duration(i))),
+			Edited:    myTimeToString(now.UTC().Add(time.Duration(i))),
+			Category:  category,
 		}
 		ret = append(ret, art)
 	}
@@ -176,12 +174,10 @@ func MakeArticleOfCategory(i int, now time.Time, category string) Article {
 		Body: `<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.</p>
 		<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.</p>
 		<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.</p>`,
-		Slug:               strings.ToLower(category) + "-article-" + strconv.Itoa(i),
-		Published:          now.UTC(),
-		Edited:             now.UTC(),
-		FormattedPublished: myDateFormat(now.UTC()),
-		FormattedEdited:    myDateFormat(now.UTC()),
-		Category:           category,
+		Slug:      strings.ToLower(category) + "-article-" + strconv.Itoa(i),
+		Published: myTimeToString(now.UTC().Add(time.Duration(i))),
+		Edited:    myTimeToString(now.UTC().Add(time.Duration(i))),
+		Category:  category,
 	}
 	return ret
 }
@@ -194,10 +190,23 @@ func setIndexTemplate() *template.Template {
 	return template.Must(template.ParseFiles("static/templates/base.html", "static/templates/nav.html", "static/templates/index.html"))
 }
 
-func myDateFormat(t time.Time) string {
+func myTimeToString(t time.Time) string {
 	year, month, day := t.Date()
-	dateString := strconv.Itoa(year) + "-" + fmt.Sprintf("%02d", int(month)) + "-" + strconv.Itoa(day)
+	hour, minute, second := t.Clock()
+	dateString := strconv.Itoa(year) + "-" +
+		fmt.Sprintf("%02d", int(month)) + "-" +
+		fmt.Sprintf("%02d", day) + " " +
+		fmt.Sprintf("%02d", hour) + ":" +
+		fmt.Sprintf("%02d", minute) + ":" +
+		fmt.Sprintf("%02d", second)
 	return dateString
+}
+
+func myStringToTime(s string) time.Time {
+	layout := "2006-01-02 15:04:05"
+	t, err := time.Parse(layout, s)
+	checkErr(err)
+	return t
 }
 
 // I made these, thinking that they would reduce the amount of data sent to the user.
@@ -215,4 +224,28 @@ func articleWithoutBody(a Article) Article {
 	ret := a
 	ret.Body = ""
 	return ret
+}
+
+func checkErr(err error) {
+	if err != nil {
+		// log.Fatal(err)
+		panic(err)
+	}
+}
+
+func makeTempFile() (*os.File, func()) {
+	tmpfile, err := ioutil.TempFile("", "db")
+
+	if err != nil {
+		log.Fatalf("could not create temp file %v", err)
+	}
+
+	tmpfile.Write([]byte(""))
+
+	removeFile := func() {
+		tmpfile.Close()
+		os.Remove(tmpfile.Name())
+	}
+
+	return tmpfile, removeFile
 }

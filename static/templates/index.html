@@ -14,12 +14,12 @@
               </div>
               <div class="message-body">
                 <p>{{.Preview}}</p>
-                {{if eq .FormattedPublished .FormattedEdited}}
+                {{if eq .Published .Edited}}
                 <br>
-                <p class="is-size-6 tag is-white">Published: {{.FormattedPublished}}</p>
+                <p class="is-size-6 tag is-white">Published: {{.Published}}</p>
                 {{else}}
                 <br>
-                <p class="is-size-6 tag is-white">Last Edited: {{.FormattedEdited}}</p>
+                <p class="is-size-6 tag is-white">Last Edited: {{.Edited}}</p>
                 {{end}}
               </div>
             </a>
@@ -32,7 +32,7 @@
               <a href="/{{.Slug}}">
                 <p class="level is-mobile">
                   <span class="is-size-6 level-left">{{.Title}}</span>
-                  <span class="is-size-6 level-right">{{.FormattedPublished}}</span>
+                  <span class="is-size-6 level-right">{{.Published}}</span>
                 </p>
               </a>
               {{end}}
@@ -42,7 +42,7 @@
               <a href="/{{.Slug}}">
                 <p class="level is-mobile">
                   <span class="is-size-6 level-left">{{.Title}}</span>
-                  <span class="is-size-6 level-right">{{.FormattedPublished}}</span>
+                  <span class="is-size-6 level-right">{{.Published}}</span>
                 </p>
               </a>
               {{end}}

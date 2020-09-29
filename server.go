@@ -249,3 +249,21 @@ func makeTempFile() (*os.File, func()) {
 
 	return tmpfile, removeFile
 }
+
+// Given a slice of articles and a page number, will return that page's articles, the actual current page and the highest page number.
+func paginate(a []Article, page int) ([]Article, int, int) {
+	p := page
+	if page < 1 {
+		p = 1
+	}
+	maxPage := (len(a) / perPage)
+	if page > maxPage {
+		p = maxPage
+	}
+	endArticle := (p * perPage) - 1
+	if len(a) < endArticle {
+		endArticle = len(a)
+	}
+
+	return a[(p-1)*perPage : endArticle+1], p, maxPage
+}

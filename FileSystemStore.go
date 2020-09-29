@@ -41,8 +41,9 @@ func NewFileSystemStore(dbFile *os.File, articles ...[]Article) (*FileSystemStor
 
 func (f *FileSystemStore) getAll() []Article {
 	var ret []Article
-	rows, err := f.db.Query("SELECT * FROM article")
+	rows, err := f.db.Query("SELECT * FROM Article")
 	checkErr(err)
+	defer rows.Close()
 
 	for rows.Next() {
 		var a Article
@@ -52,12 +53,24 @@ func (f *FileSystemStore) getAll() []Article {
 		ret = append(ret, a)
 	}
 
-	rows.Close()
 	return ret
 }
 
-func (f *FileSystemStore) getPage(page int, category string) (articles []Article, curPage int, maxPage int) {
-	return []Article{}, 0, 0
+func (f *FileSystemStore) getPage(page int, category string) (articles []Article, p int, maxPage int) {
+	var ret []Article
+	rows, err := f.db.Query("SELECT * FROM Article WHERE Category = ?", category)
+	checkErr(err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var a Article
+		var id int
+		err = rows.Scan(&id, &a.Title, &a.Preview, &a.Body, &a.Slug, &a.Published, &a.Edited, &a.Category)
+		checkErr(err)
+		ret = append(ret, a)
+	}
+
+	return paginate(ret, page)
 }
 
 func (f *FileSystemStore) getArticle(slug string) Article {
@@ -65,7 +78,7 @@ func (f *FileSystemStore) getArticle(slug string) Article {
 }
 
 func (f *FileSystemStore) saveArticles(articles []Article) {
-	stmt, err := f.db.Prepare("INSERT INTO article(Title, Preview, Body, Slug, Published, Edited, Category) values(?, ?, ?, ?, ?, ?, ?)")
+	stmt, err := f.db.Prepare("INSERT INTO Article(Title, Preview, Body, Slug, Published, Edited, Category) values(?, ?, ?, ?, ?, ?, ?)")
 	checkErr(err)
 
 	for _, a := range articles {
@@ -83,7 +96,7 @@ func (f *FileSystemStore) setupDB(dbFile *os.File) {
 }
 
 func (f *FileSystemStore) createTable(db *sql.DB) {
-	createArticleTableSQL := `CREATE TABLE article (
+	createArticleTableSQL := `CREATE TABLE Article (
     "uid" INTEGER PRIMARY KEY AUTOINCREMENT,
     "Title" VARCHAR(64) NULL,
     "Preview" TEXT NULL,

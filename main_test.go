@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func TestArticle(t *testing.T) {
+func TestArticleRouting(t *testing.T) {
 	t.Run("get all", func(t *testing.T) {
 		articles := MakeBothTypesOfArticle(20)
 
@@ -99,24 +99,51 @@ func TestFileSystemStore(t *testing.T) {
 	})
 
 	t.Run("new store", func(t *testing.T) {
-		tmpFile, cleanTempFile := makeTempFile()
-		defer cleanTempFile()
-
-		articles := MakeBothTypesOfArticle(20)
-		store, closeDB := NewFileSystemStore(tmpFile, articles)
-		defer closeDB()
-
 		t.Run("get all", func(t *testing.T) {
+			tmpFile, cleanTempFile := makeTempFile()
+			defer cleanTempFile()
+
+			articles := MakeBothTypesOfArticle(50)
+			store, closeDB := NewFileSystemStore(tmpFile, articles)
+			defer closeDB()
+
 			got := store.getAll()
 			assertArticles(t, got, articles)
 		})
 
-		// t.Run("get page", func(t *testing.T) {
-		// 	got, p, mxP := store.getPage(1, progCat)
-		// 	_, _, _ = got, p, mxP
-		// 	t.Error("temp")
-		// })
-		//
+		t.Run("get page", func(t *testing.T) {
+			tmpFile, cleanTempFile := makeTempFile()
+			defer cleanTempFile()
+
+			progWant, otherWant := MakeSeparatedArticles(50)
+			store, closeDB := NewFileSystemStore(tmpFile, append(progWant, otherWant...))
+			defer closeDB()
+
+			got, p, mxP := store.getPage(1, progCat)
+
+			assertInt(t, p, 1)
+			assertInt(t, mxP, 50/perPage)
+			assertArticles(t, got, progWant[0:perPage])
+
+			got, p, mxP = store.getPage(-1, progCat)
+
+			assertInt(t, p, 1)
+			assertInt(t, mxP, 50/perPage)
+			assertArticles(t, got, progWant[0:perPage])
+
+			got, p, mxP = store.getPage(3, otherCat)
+
+			assertInt(t, p, 3)
+			assertInt(t, mxP, 50/perPage)
+			assertArticles(t, got, otherWant[2*perPage:3*perPage])
+
+			got, p, mxP = store.getPage(6, otherCat)
+
+			assertInt(t, p, 5)
+			assertInt(t, mxP, 50/perPage)
+			assertArticles(t, got, otherWant[4*perPage:5*perPage])
+		})
+
 		// t.Run("get single article", func(t *testing.T) {
 		// 	got := store.getArticle("programming-article-1")
 		// 	_ = got
@@ -229,21 +256,7 @@ func (s *StubStore) getPage(page int, category string) ([]Article, int, int) {
 		return myStringToTime(filtered[i].Published).Before(myStringToTime(filtered[j].Published))
 	})
 
-	p := page
-	if page < 1 {
-		p = 1
-	}
-	maxPage := (len(filtered) / perPage)
-	if page > maxPage {
-		p = maxPage
-	}
-	endArticle := (p * perPage) - 1
-	if len(filtered) < endArticle {
-		endArticle = len(filtered)
-	}
-
-	articles := filtered[(p-1)*perPage : endArticle+1]
-	return articles, p, maxPage
+	return paginate(filtered, page)
 }
 
 func (s *StubStore) getArticle(slug string) Article {
@@ -272,6 +285,12 @@ func MakeSeparatedArticles(n int) (progWant []Article, otherWant []Article) {
 		otherWant = append(otherWant, MakeArticleOfCategory(i, time.Now(), otherCat))
 	}
 	return
+}
+
+func assertInt(t *testing.T, got, want int) {
+	if got != want {
+		t.Errorf("got %d, want %d", got, want)
+	}
 }
 
 func assertArticles(t *testing.T, got, want []Article) {

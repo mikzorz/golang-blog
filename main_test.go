@@ -144,11 +144,20 @@ func TestFileSystemStore(t *testing.T) {
 			assertArticles(t, got, otherWant[4*perPage:5*perPage])
 		})
 
-		// t.Run("get single article", func(t *testing.T) {
-		// 	got := store.getArticle("programming-article-1")
-		// 	_ = got
-		// 	t.Error("temp")
-		// })
+		t.Run("get single article", func(t *testing.T) {
+			tmpFile, cleanTempFile := makeTempFile()
+			defer cleanTempFile()
+
+			prog, other := MakeSeparatedArticles(20)
+			store, closeDB := NewFileSystemStore(tmpFile, append(prog, other...))
+			defer closeDB()
+
+			got := store.getArticle(prog[0].Slug)
+			assertArticle(t, got, prog[0])
+
+			got = store.getArticle("does-not-exist")
+			assertArticle(t, got, Article{})
+		})
 	})
 }
 
@@ -290,6 +299,15 @@ func MakeSeparatedArticles(n int) (progWant []Article, otherWant []Article) {
 func assertInt(t *testing.T, got, want int) {
 	if got != want {
 		t.Errorf("got %d, want %d", got, want)
+	}
+}
+
+func assertArticle(t *testing.T, got, want Article) {
+	t.Helper()
+	if got != want {
+		// Very ugly logs.
+		// t.Errorf("article slice doesn't match, got %v, want %v", got, want)
+		t.Errorf("articles don't match, got %v, want %v", got, want)
 	}
 }
 

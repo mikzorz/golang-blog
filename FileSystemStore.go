@@ -26,7 +26,6 @@ func NewFileSystemStore(dbFile *os.File, articles ...[]Article) (*FileSystemStor
 		f.setupDB(dbFile)
 
 		if articles != nil {
-			log.Print("articles given to NewFileSystemStore")
 			f.saveArticles(articles[0])
 		} else {
 			log.Print("no articles given to NewFileSystemStore")
@@ -74,6 +73,17 @@ func (f *FileSystemStore) getPage(page int, category string) (articles []Article
 }
 
 func (f *FileSystemStore) getArticle(slug string) Article {
+	rows, err := f.db.Query("SELECT * FROM Article WHERE Slug = ?", slug)
+	checkErr(err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var a Article
+		var id int
+		err = rows.Scan(&id, &a.Title, &a.Preview, &a.Body, &a.Slug, &a.Published, &a.Edited, &a.Category)
+		checkErr(err)
+		return a
+	}
 	return Article{}
 }
 

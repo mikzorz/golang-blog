@@ -57,24 +57,24 @@
           <nav class="pagination" role="navigation" aria-label="pagination">
             <ul class="pagination-list">
               <li>
-                <a href="/page/1" class="pagination-link {{if eq $curPage 1}}is-current{{end}}" aria-label="Go to page 1">1</a>
+                <a href={{if eq .Category "Other"}}"/other/page/1"{{else}}"/page/1"{{end}} class="pagination-link {{if eq $curPage 1}}is-current{{end}}" aria-label="Go to page 1">1</a>
               </li>
               <li>
                 <span class="pagination-ellipsis">&hellip;</span>
               </li>
               {{if and (ne $curPage 1) (ne $curPage $maxPage)}}
               <li>
-                <a href="/page/{{$curPage}}" class="pagination-link is-current" aria-label="Go to page {{$curPage}}">{{$curPage}}</a>
+                <a href={{if eq .Category "Other"}}"/other/page/{{$curPage}}"{{else}}"/page/{{$curPage}}"{{end}} class="pagination-link is-current" aria-label="Go to page {{$curPage}}">{{$curPage}}</a>
               </li>
               <li>
                 <span class="pagination-ellipsis">&hellip;</span>
               </li>
               {{end}}
               <li>
-                <a href="/page/{{$maxPage}}" class="pagination-link {{if eq $curPage $maxPage}}is-current{{end}}" aria-label="Go to page {{$maxPage}}">{{$maxPage}}</a>
+                <a href={{if eq .Category "Other"}}"/other/page/{{$maxPage}}"{{else}}"/page/{{$maxPage}}"{{end}} class="pagination-link {{if eq $curPage $maxPage}}is-current{{end}}" aria-label="Go to page {{$maxPage}}">{{$maxPage}}</a>
               </li>
             </ul>
-            <a {{if ne $curPage 1}}href="/page/{{.PageInfo.Prev}}"{{end}} class="pagination-previous" {{if eq $curPage 1}}disabled{{end}}>&larr;</a>
-            <a {{if ne $curPage $maxPage}}href="/page/{{.PageInfo.Next}}"{{end}} class="pagination-next" {{if eq $curPage $maxPage}}disabled{{end}}>&rarr;</a>
+            <a {{if ne $curPage 1}}href={{if eq .Category "Other"}}"/other/page/{{.PageInfo.Prev}}"{{else}}"/page/{{.PageInfo.Prev}}"{{end}}{{else}}disabled{{end}} class="pagination-previous" >&larr;</a>
+            <a {{if ne $curPage $maxPage}}href={{if eq .Category "Other"}}"/other/page/{{.PageInfo.Next}}"{{else}}"/page/{{.PageInfo.Next}}"{{end}}{{else}}disabled{{end}} class="pagination-next">&rarr;</a>
           </nav>
 {{end}}

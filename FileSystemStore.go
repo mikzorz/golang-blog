@@ -26,7 +26,9 @@ func NewFileSystemStore(dbFile *os.File, articles ...[]Article) (*FileSystemStor
 		f.setupDB(dbFile)
 
 		if articles != nil {
-			f.saveArticles(articles[0])
+			if len(f.getAll()) == 0 {
+				f.saveArticles(articles[0])
+			}
 		} else {
 			log.Print("no articles given to NewFileSystemStore")
 		}
@@ -52,7 +54,7 @@ func (f *FileSystemStore) getAll() []Article {
 		ret = append(ret, a)
 	}
 
-	return ret
+	return reverseArticles(ret)
 }
 
 func (f *FileSystemStore) getPage(page int, category string) (articles []Article, p int, maxPage int) {
@@ -69,11 +71,11 @@ func (f *FileSystemStore) getPage(page int, category string) (articles []Article
 		ret = append(ret, a)
 	}
 
-	return paginate(ret, page)
+	return f.paginate(reverseArticles(ret), page)
 }
 
 func (f *FileSystemStore) getArticle(slug string) Article {
-	rows, err := f.db.Query("SELECT * FROM Article WHERE Slug = ?", slug)
+	rows, err := f.db.Query("SELECT * FROM Article WHERE Slug = ? Limit 1", slug)
 	checkErr(err)
 	defer rows.Close()
 
@@ -88,7 +90,7 @@ func (f *FileSystemStore) getArticle(slug string) Article {
 }
 
 func (f *FileSystemStore) saveArticles(articles []Article) {
-	stmt, err := f.db.Prepare("INSERT INTO Article(Title, Preview, Body, Slug, Published, Edited, Category) values(?, ?, ?, ?, ?, ?, ?)")
+	stmt, err := f.db.Prepare("INSERT INTO Article(Title, Preview, Body, Slug, Published, Edited, Category) values(?, ?, ?, ?, DATETIME(?), ?, ?)")
 	checkErr(err)
 
 	for _, a := range articles {
@@ -119,4 +121,22 @@ func (f *FileSystemStore) createTable(db *sql.DB) {
 	stmt, err := db.Prepare(createArticleTableSQL)
 	checkErr(err)
 	stmt.Exec()
+}
+
+// Given a slice of articles and a page number, will return that page's articles, the actual current page and the highest page number.
+func (f *FileSystemStore) paginate(a []Article, page int) ([]Article, int, int) {
+	p := page
+	if page < 1 {
+		p = 1
+	}
+	maxPage := (len(a) / perPage)
+	if page > maxPage {
+		p = maxPage
+	}
+	endArticle := (p * perPage) - 1
+	if len(a) < endArticle {
+		endArticle = len(a)
+	}
+
+	return a[(p-1)*perPage : endArticle+1], p, maxPage
 }

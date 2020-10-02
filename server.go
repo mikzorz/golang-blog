@@ -74,7 +74,7 @@ func (s *Server) MainIndexPage(w http.ResponseWriter, r *http.Request) {
 		Articles []Article
 		Category string
 		PageInfo PageInfo
-	}{articles, progCat, makePageInfoObject(page, maxPage)})
+	}{articlesWithoutTimes(articles), progCat, makePageInfoObject(page, maxPage)})
 }
 
 func (s *Server) OtherIndexPage(w http.ResponseWriter, r *http.Request) {
@@ -89,14 +89,14 @@ func (s *Server) OtherIndexPage(w http.ResponseWriter, r *http.Request) {
 		Articles []Article
 		Category string
 		PageInfo PageInfo
-	}{articles, otherCat, makePageInfoObject(page, maxPage)})
+	}{articlesWithoutTimes(articles), otherCat, makePageInfoObject(page, maxPage)})
 }
 
 func (s *Server) All(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(200)
 
 	// Get articles, then split them into columns.
-	articles := s.store.getAll()
+	articles := articlesWithoutTimes(s.store.getAll())
 
 	// Reload HTML without rebuilding project.
 	if DEV {
@@ -121,7 +121,7 @@ func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {
 		tmpl := template.Must(template.ParseFiles("static/templates/base.html", "static/templates/nav.html", "static/templates/article.html"))
 		tmpl, _ = tmpl.Parse("{{define \"body\"}}" + article.Body + "{{end}}")
 
-		tmpl.Execute(w, struct{ Article Article }{article})
+		tmpl.Execute(w, struct{ Article Article }{articleWithoutTime(article)})
 	} else {
 		w.WriteHeader(404)
 		fmt.Fprint(w, "404 not found")
@@ -158,8 +158,8 @@ func MakeArticlesOfCategory(amount int, now time.Time, category string) []Articl
 			Title:     category + " Article " + strconv.Itoa(i),
 			Body:      "Test Article " + strconv.Itoa(i),
 			Slug:      strings.ToLower(category) + "-article-" + strconv.Itoa(i),
-			Published: myTimeToString(now.UTC().Add(time.Duration(i))),
-			Edited:    myTimeToString(now.UTC().Add(time.Duration(i))),
+			Published: myTimeToString(now.Add(time.Second * time.Duration(i))),
+			Edited:    myTimeToString(now.Add(time.Second * time.Duration(i))),
 			Category:  category,
 		}
 		ret = append(ret, art)
@@ -175,8 +175,8 @@ func MakeArticleOfCategory(i int, now time.Time, category string) Article {
 		<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.</p>
 		<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec in tincidunt magna. Maecenas venenatis dictum porttitor. Nulla condimentum est odio, ac blandit lorem posuere quis. Donec bibendum lectus nec ligula laoreet, a varius mi blandit. Fusce vel consequat odio. Praesent porttitor odio vel tincidunt sodales.</p>`,
 		Slug:      strings.ToLower(category) + "-article-" + strconv.Itoa(i),
-		Published: myTimeToString(now.UTC().Add(time.Duration(i))),
-		Edited:    myTimeToString(now.UTC().Add(time.Duration(i))),
+		Published: myTimeToString(now.Add(time.Second * time.Duration(i))),
+		Edited:    myTimeToString(now.Add(time.Second * time.Duration(i))),
 		Category:  category,
 	}
 	return ret
@@ -209,20 +209,18 @@ func myStringToTime(s string) time.Time {
 	return t
 }
 
-// I made these, thinking that they would reduce the amount of data sent to the user.
-// Then I realized that everything is rendered server-side.
-// If it's not rendered in the template, it isn't being sent...
-func articlesWithoutBodies(articles []Article) []Article {
+func articlesWithoutTimes(articles []Article) []Article {
 	ret := make([]Article, len(articles))
 	for i, a := range articles {
-		ret[i] = articleWithoutBody(a)
+		ret[i] = articleWithoutTime(a)
 	}
 	return ret
 }
 
-func articleWithoutBody(a Article) Article {
+func articleWithoutTime(a Article) Article {
 	ret := a
-	ret.Body = ""
+	ret.Published = ret.Published[:10]
+	ret.Edited = ret.Edited[:10]
 	return ret
 }
 
@@ -250,20 +248,12 @@ func makeTempFile() (*os.File, func()) {
 	return tmpfile, removeFile
 }
 
-// Given a slice of articles and a page number, will return that page's articles, the actual current page and the highest page number.
-func paginate(a []Article, page int) ([]Article, int, int) {
-	p := page
-	if page < 1 {
-		p = 1
-	}
-	maxPage := (len(a) / perPage)
-	if page > maxPage {
-		p = maxPage
-	}
-	endArticle := (p * perPage) - 1
-	if len(a) < endArticle {
-		endArticle = len(a)
+func reverseArticles(in []Article) []Article {
+	ret := make([]Article, len(in))
+
+	for i, a := range in {
+		ret[len(ret)-i-1] = a
 	}
 
-	return a[(p-1)*perPage : endArticle+1], p, maxPage
+	return ret
 }

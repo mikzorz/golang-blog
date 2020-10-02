@@ -6,10 +6,10 @@
         <div class="content columns">
           <div class="column is-8 is-offset-2">
           <h1 class="title">{{$a.Title}}</h1>
-          {{if eq $a.FormattedPublished $a.FormattedEdited}}
-          <p class="is-size-6">{{$a.FormattedPublished}}</p>
+          {{if eq $a.Published $a.Edited}}
+          <p class="is-size-6">{{$a.Published}}</p>
           {{else}}
-          <p class="is-size-6">{{$a.FormattedEdited}}</p>
+          <p class="is-size-6">{{$a.Edited}}</p>
           {{end}}
           {{template "body"}}
           </div>

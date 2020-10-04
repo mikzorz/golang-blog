@@ -30,7 +30,7 @@ func NewFileSystemStore(dbFile *os.File, articles ...[]Article) (*FileSystemStor
 				f.saveArticles(articles[0])
 			}
 		} else {
-			log.Print("no articles given to NewFileSystemStore")
+			// log.Print("no articles given to NewFileSystemStore")
 		}
 	}
 
@@ -87,6 +87,10 @@ func (f *FileSystemStore) getArticle(slug string) Article {
 		return a
 	}
 	return Article{}
+}
+
+func (f *FileSystemStore) newArticle(a Article) {
+
 }
 
 func (f *FileSystemStore) saveArticles(articles []Article) {

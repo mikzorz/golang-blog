@@ -36,6 +36,7 @@ type Store interface {
 	getAll() []Article
 	getPage(int, string) ([]Article, int, int)
 	getArticle(string) Article
+	newArticle(Article)
 }
 
 type Server struct {
@@ -52,6 +53,7 @@ func NewServer(store Store) *Server {
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(path.Join(base, "/static")))))
 
 	r.HandleFunc("/", s.MainIndexPage).Methods("GET")
+	r.HandleFunc("/", s.NewArticle).Methods("POST")
 	r.HandleFunc("/page/{page}", s.MainIndexPage).Methods("GET")
 	r.HandleFunc("/other", s.OtherIndexPage).Methods("GET")
 	r.HandleFunc("/other/page/{page}", s.OtherIndexPage).Methods("GET")
@@ -126,6 +128,65 @@ func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(404)
 		fmt.Fprint(w, "404 not found")
 	}
+}
+
+func (s *Server) NewArticle(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	checkErr(err)
+
+	a := Article{Title: r.FormValue("title")}
+	a.Preview = r.FormValue("preview")
+	a.Body = r.FormValue("body")
+	a.Slug = r.FormValue("slug")
+	a.Published = myTimeToString(time.Now().UTC())
+	a.Edited = a.Published
+	a.Category = r.FormValue("category")
+
+	errors := s.ValidateArticle(a)
+	if len(errors) != 0 {
+		w.WriteHeader(400)
+		return
+	}
+
+	s.store.newArticle(a)
+}
+
+// Should return all errors.
+func (s *Server) ValidateArticle(a Article) (errors []error) {
+	// Check each field.
+	// If Title is too long or doesn't exist.
+	maxTitleLength := 50 // Not finalized, test in browser to see when titles look bad.
+	if len([]rune(a.Title)) > maxTitleLength {
+		errors = append(errors, fmt.Errorf("Title too long"))
+	}
+	if len(a.Title) == 0 {
+		errors = append(errors, fmt.Errorf("Title can't be empty"))
+	}
+	// If Preview is empty.
+	if len(a.Preview) == 0 {
+		errors = append(errors, fmt.Errorf("Preview can't be empty"))
+	}
+	// If Body is empty.
+	if len(a.Body) == 0 {
+		errors = append(errors, fmt.Errorf("Body can't be empty"))
+	}
+	// If Slug contains non-valid characters.
+	if len(a.Slug) == 0 {
+		errors = append(errors, fmt.Errorf("Slug can't be empty"))
+	}
+	illegalChars := "&$+,/:;=?@# <>[]{}|\\^%"
+	for i := 0; i < len(a.Slug); i++ {
+		for j := 0; j < len(illegalChars); j++ {
+			if a.Slug[i] == illegalChars[j] {
+				errors = append(errors, fmt.Errorf("Slug contains illegal characters"))
+			}
+		}
+	}
+	// If Category is not one of the valid categories.
+	if a.Category != progCat && a.Category != otherCat {
+		errors = append(errors, fmt.Errorf("Category is invalid"))
+	}
+	return
 }
 
 func getPageNumber(r *http.Request) int {

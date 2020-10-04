@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -88,7 +89,7 @@ func TestArticle(t *testing.T) {
 		assertCalls(t, store.calls, want)
 	})
 
-	t.Run("post should show date but not time", func(t *testing.T) {
+	t.Run("article should show date but not time", func(t *testing.T) {
 		article := MakeArticleOfCategory(1, time.Now(), progCat)
 
 		store := StubStore{articles: []Article{article}}
@@ -145,6 +146,122 @@ func TestArticle(t *testing.T) {
 			assertContains(t, resp.Body.String(), want)
 			assertNotContain(t, resp.Body.String(), notWant)
 		})
+	})
+
+	validArticle := Article{
+		Title:    "POST me!",
+		Preview:  "<p>This is a valid preview.</p>",
+		Body:     "<p>This is a valid body of an article.</p>",
+		Slug:     "this-IS_a.v4l1d~slug",
+		Category: "Other",
+	}
+
+	t.Run("POST new valid article to /", func(t *testing.T) {
+		store := StubStore{articles: []Article{}}
+		server := NewServer(&store)
+
+		want := validArticle
+
+		data := url.Values{}
+		data.Set("title", want.Title)
+		data.Set("preview", want.Preview)
+		data.Set("body", want.Body)
+		data.Set("slug", want.Slug)
+		data.Set("category", want.Category)
+
+		resp := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+		server.ServeHTTP(resp, req)
+
+		assertStatus(t, resp.Code, 200)
+		assertCalls(t, store.calls, []string{"new"})
+		if len(store.articles) != 0 {
+			assertArticleWithoutTime(t, store.articles[0], want)
+		} else {
+			t.Error("failed to save new valid article")
+		}
+	})
+
+	t.Run("fail to POST new invalid article to /", func(t *testing.T) {
+		store := StubStore{articles: []Article{}, calls: []string{}}
+		server := NewServer(&store)
+
+		invalidArticles := []Article{}
+		for i := 0; i < 5; i++ {
+			invalidArticles = append(invalidArticles, validArticle)
+		}
+
+		invalidArticles[0].Title = strings.Repeat("this is an invalid title ", 100) // too long
+		invalidArticles[1].Preview = ""                                             // empty
+		invalidArticles[2].Body = ""                                                // empty
+		invalidArticles[3].Slug = "&$+,/:;=?@# <>[]{}|\\^%"                         // unsafe or reserved characters
+		invalidArticles[4].Category = "invalid-category"                            // not one of the valid categories
+
+		for i := 0; i < len(invalidArticles); i++ {
+			notWant := invalidArticles[i]
+			data := url.Values{}
+			data.Set("title", notWant.Title)
+			data.Set("preview", notWant.Preview)
+			data.Set("body", notWant.Body)
+			data.Set("slug", notWant.Slug)
+			data.Set("category", notWant.Category)
+
+			resp := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+			server.ServeHTTP(resp, req)
+
+			assertStatus(t, resp.Code, 400)
+			assertCalls(t, store.calls, []string{})
+			if len(store.articles) != 0 {
+				t.Errorf("saved an invalid article, %v", notWant)
+			}
+			store.articles = []Article{}
+			store.calls = []string{}
+		}
+	})
+
+	t.Run("fail to POST new empty article to /", func(t *testing.T) {
+		store := StubStore{articles: []Article{}, calls: []string{}}
+		server := NewServer(&store)
+
+		invalidArticles := []Article{}
+		for i := 0; i < 5; i++ {
+			invalidArticles = append(invalidArticles, validArticle)
+		}
+
+		invalidArticles[0].Title = ""
+		invalidArticles[1].Preview = ""
+		invalidArticles[2].Body = ""
+		invalidArticles[3].Slug = ""
+		invalidArticles[4].Category = ""
+
+		for i := 0; i < len(invalidArticles); i++ {
+			empty := invalidArticles[i]
+			data := url.Values{}
+			data.Set("title", empty.Title)
+			data.Set("preview", empty.Preview)
+			data.Set("body", empty.Body)
+			data.Set("slug", empty.Slug)
+			data.Set("category", empty.Category)
+
+			resp := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+			server.ServeHTTP(resp, req)
+
+			assertStatus(t, resp.Code, 400)
+			assertCalls(t, store.calls, []string{})
+			if len(store.articles) != 0 {
+				t.Errorf("saved an empty article, %v", invalidArticles[i])
+			}
+			store.articles = []Article{}
+			store.calls = []string{}
+		}
 	})
 }
 
@@ -390,6 +507,11 @@ func (s *StubStore) getArticle(slug string) Article {
 	return Article{}
 }
 
+func (s *StubStore) newArticle(a Article) {
+	s.calls = append(s.calls, "new")
+	s.articles = append(s.articles, a)
+}
+
 func newGetRequest(t *testing.T, path string) *http.Request {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodGet, path, nil)
@@ -419,6 +541,27 @@ func assertArticle(t *testing.T, got, want Article) {
 	t.Helper()
 	if got != want {
 		t.Errorf("articles don't match, got %v, want %v", got, want)
+	}
+}
+
+func assertArticleWithoutTime(t *testing.T, got, want Article) {
+	t.Helper()
+	timelessGot := Article{
+		Title:    got.Title,
+		Preview:  got.Preview,
+		Body:     got.Body,
+		Slug:     got.Slug,
+		Category: got.Category,
+	}
+	if timelessGot != want {
+		t.Errorf("articles don't match, got %v, want %v", timelessGot, want)
+	}
+}
+
+func assertNotArticle(t *testing.T, got, notwant Article) {
+	t.Helper()
+	if got == notwant {
+		t.Errorf("articles shouldn't match, got %v, don't want %v", got, notwant)
 	}
 }
 

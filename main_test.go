@@ -10,6 +10,16 @@ import (
 	"time"
 )
 
+// Move things like reused article structs up here. NOT DONE
+
+var validArticleBase = Article{
+	Title:    "POST me!",
+	Preview:  "<p>This is a valid preview.</p>",
+	Body:     "<p>This is a valid body of an article.</p>",
+	Slug:     "this-is_a.v4l1d~slug",
+	Category: "Other",
+}
+
 func TestArticle(t *testing.T) {
 	t.Run("get all, routing", func(t *testing.T) {
 		store := StubStore{calls: []string{}}
@@ -148,19 +158,11 @@ func TestArticle(t *testing.T) {
 		})
 	})
 
-	validArticle := Article{
-		Title:    "POST me!",
-		Preview:  "<p>This is a valid preview.</p>",
-		Body:     "<p>This is a valid body of an article.</p>",
-		Slug:     "this-IS_a.v4l1d~slug",
-		Category: "Other",
-	}
-
 	t.Run("POST new valid article to /", func(t *testing.T) {
 		store := StubStore{articles: []Article{}}
 		server := NewServer(&store)
 
-		want := validArticle
+		want := validArticleBase
 
 		data := url.Values{}
 		data.Set("title", want.Title)
@@ -175,8 +177,8 @@ func TestArticle(t *testing.T) {
 
 		server.ServeHTTP(resp, req)
 
-		assertStatus(t, resp.Code, 200)
-		assertCalls(t, store.calls, []string{"new"})
+		assertStatus(t, resp.Code, 202)
+		assertCalls(t, store.calls, []string{"new", "getAll"})
 		if len(store.articles) != 0 {
 			assertArticleWithoutTime(t, store.articles[0], want)
 		} else {
@@ -190,7 +192,7 @@ func TestArticle(t *testing.T) {
 
 		invalidArticles := []Article{}
 		for i := 0; i < 5; i++ {
-			invalidArticles = append(invalidArticles, validArticle)
+			invalidArticles = append(invalidArticles, validArticleBase)
 		}
 
 		invalidArticles[0].Title = strings.Repeat("this is an invalid title ", 100) // too long
@@ -230,7 +232,7 @@ func TestArticle(t *testing.T) {
 
 		invalidArticles := []Article{}
 		for i := 0; i < 5; i++ {
-			invalidArticles = append(invalidArticles, validArticle)
+			invalidArticles = append(invalidArticles, validArticleBase)
 		}
 
 		invalidArticles[0].Title = ""
@@ -382,12 +384,30 @@ func TestFileSystemStore(t *testing.T) {
 			got = store.getArticle("does-not-exist")
 			assertArticle(t, got, Article{})
 		})
+
+		t.Run("save article", func(t *testing.T) {
+			tmpFile, cleanTempFile := makeTempFile()
+			defer cleanTempFile()
+
+			store, closeDB := NewFileSystemStore(tmpFile)
+			defer closeDB()
+
+			validArticle := validArticleBase
+			validArticle.Published = myTimeToString(time.Now().UTC())
+			validArticle.Edited = myTimeToString(time.Now().UTC())
+
+			store.newArticle(validArticle)
+
+			got := store.getArticle(validArticle.Slug)
+
+			assertArticle(t, got, validArticle)
+		})
 	})
 }
 
 // Integration test
-func TestIntegration(t *testing.T) {
-	t.Run("get all", func(t *testing.T) {
+func TestWebIntegration(t *testing.T) {
+	t.Run("/all returns all articles", func(t *testing.T) {
 		tmpFile, cleanTempFile := makeTempFile()
 		defer cleanTempFile()
 		articles := MakeBothTypesOfArticle(20)
@@ -476,7 +496,156 @@ func TestIntegration(t *testing.T) {
 		server.ServeHTTP(resp, req)
 
 		assertStatus(t, resp.Code, 404)
+	})
 
+	t.Run("new article submission", func(t *testing.T) {
+		tmpFile, cleanTempFile := makeTempFile()
+		defer cleanTempFile()
+		store, closeDB := NewFileSystemStore(tmpFile)
+		defer closeDB()
+		server := NewServer(store)
+
+		t.Run("get new article form page", func(t *testing.T) {
+			resp := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodGet, "/new", nil)
+			server.ServeHTTP(resp, req)
+
+			// does resp contain form? Can I just check if status code is 200?
+			assertStatus(t, resp.Code, 200)
+			assertContains(t, resp.Body.String(), "New Article") // May change this to be more specific.(?)
+		})
+
+		t.Run("form page should show validation errors after submitting invalid article", func(t *testing.T) {
+			invalidArticle := Article{
+				Title:    strings.Repeat("this is an invalid title ", 100),
+				Preview:  "",
+				Body:     "",
+				Slug:     "&$+,/:;=?@# <>[]{}|\\^%",
+				Category: "invalid-category",
+			}
+			data := url.Values{}
+			data.Set("title", invalidArticle.Title)
+			data.Set("preview", invalidArticle.Preview)
+			data.Set("body", invalidArticle.Body)
+			data.Set("slug", invalidArticle.Slug)
+			data.Set("category", invalidArticle.Category)
+
+			resp := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			server.ServeHTTP(resp, req)
+
+			assertStatus(t, resp.Code, 400)
+			// Are validation errors returned and displayed?
+			assertContains(t, resp.Body.String(), errTitleLong)
+			assertContains(t, resp.Body.String(), errPreviewEmpty)
+			assertContains(t, resp.Body.String(), errBodyEmpty)
+			assertContains(t, resp.Body.String(), errSlugBad)
+			assertContains(t, resp.Body.String(), errCatInvalid)
+
+			// Does the input remain in the input fields after validation instead of wiping it all clean?
+			newA := invalidArticle
+			newA.Preview = "Valid Preview"
+			newA.Body = "Valid Body"
+
+			data = url.Values{}
+			data.Set("title", newA.Title)
+			data.Set("preview", newA.Preview)
+			data.Set("body", newA.Body)
+			data.Set("slug", newA.Slug)
+			data.Set("category", newA.Category)
+
+			resp = httptest.NewRecorder()
+			req, _ = http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			server.ServeHTTP(resp, req)
+
+			assertStatus(t, resp.Code, 400)
+
+			assertContains(t, resp.Body.String(), newA.Title)
+			assertContains(t, resp.Body.String(), newA.Preview)
+			assertContains(t, resp.Body.String(), newA.Body)
+			assertContains(t, resp.Body.String(), newA.Slug)
+			assertContains(t, resp.Body.String(), newA.Category)
+		})
+
+		t.Run("should be able to submit and save new valid article", func(t *testing.T) {
+			validArticle := validArticleBase
+			data := url.Values{}
+			data.Set("title", validArticle.Title)
+			data.Set("preview", validArticle.Preview)
+			data.Set("body", validArticle.Body)
+			data.Set("slug", validArticle.Slug)
+			data.Set("category", validArticle.Category)
+
+			resp := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			server.ServeHTTP(resp, req)
+
+			assertStatus(t, resp.Code, http.StatusAccepted)
+			saved := store.getArticle(validArticle.Slug)
+			if saved != (Article{}) {
+				assertArticleWithoutTime(t, saved, validArticle)
+			} else {
+				t.Error("valid article could not be found in store")
+			}
+
+			// Will likely be changed to redirect to admin panel instead of index.
+			// Can I check the url?
+			assertContains(t, resp.Body.String(), "Index")
+			assertContains(t, resp.Body.String(), validArticle.Title)
+			// t.Error("not done, test redirect")
+		})
+
+		t.Run("article with slug that already exists returns error", func(t *testing.T) {
+			validArticle := validArticleBase
+			validArticle.Slug = "This-should-not-be-saved-twice"
+			validArticle.Published = myTimeToString(time.Now().UTC())
+			validArticle.Edited = myTimeToString(time.Now().UTC())
+
+			numOfArts := len(store.getAll())
+
+			// Save first article
+			store.newArticle(validArticle)
+			if len(store.getAll()) != (numOfArts + 1) {
+				t.Fatal("failed to save valid article, not finishing this test")
+			}
+
+			// Send second article
+			data := url.Values{}
+			data.Set("title", validArticle.Title)
+			data.Set("preview", validArticle.Preview)
+			data.Set("body", validArticle.Body)
+			data.Set("slug", validArticle.Slug)
+			data.Set("category", validArticle.Category)
+
+			resp := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			server.ServeHTTP(resp, req)
+
+			if len(store.getAll()) != (numOfArts + 1) {
+				t.Error("saved an article with a slug that is already in use")
+			}
+
+			// Send third article, same slug but case shifted. Should not be saved.
+			data = url.Values{}
+			data.Set("title", validArticle.Title)
+			data.Set("preview", validArticle.Preview)
+			data.Set("body", validArticle.Body)
+			data.Set("slug", "tHiS-sHoUlD-nOt-Be-SaVeD-tWiCe")
+			data.Set("category", validArticle.Category)
+
+			resp = httptest.NewRecorder()
+			req, _ = http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			server.ServeHTTP(resp, req)
+
+			if len(store.getAll()) != (numOfArts + 1) {
+				t.Error("saved an article with a slug that is already in use but with a different case")
+			}
+		})
 	})
 }
 
@@ -510,6 +679,10 @@ func (s *StubStore) getArticle(slug string) Article {
 func (s *StubStore) newArticle(a Article) {
 	s.calls = append(s.calls, "new")
 	s.articles = append(s.articles, a)
+}
+
+func (s *StubStore) doesSlugExist(slug string) bool {
+	return false
 }
 
 func newGetRequest(t *testing.T, path string) *http.Request {

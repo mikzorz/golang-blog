@@ -15,6 +15,17 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const (
+	errTitleLong         = "Title is too long"
+	errTitleEmpty        = "Title cannot be empty"
+	errPreviewEmpty      = "Preview cannot be empty"
+	errBodyEmpty         = "Body cannot be empty"
+	errSlugEmpty         = "Slug cannot be empty"
+	errSlugAlreadyExists = "Slug is already being used by another article"
+	errSlugBad           = "Slug contains illegal characters"
+	errCatInvalid        = "Category is invalid"
+)
+
 type Article struct {
 	Title     string
 	Preview   string
@@ -37,6 +48,7 @@ type Store interface {
 	getPage(int, string) ([]Article, int, int)
 	getArticle(string) Article
 	newArticle(Article)
+	doesSlugExist(string) bool
 }
 
 type Server struct {
@@ -54,6 +66,7 @@ func NewServer(store Store) *Server {
 
 	r.HandleFunc("/", s.MainIndexPage).Methods("GET")
 	r.HandleFunc("/", s.NewArticle).Methods("POST")
+	r.HandleFunc("/new", s.NewArticleForm).Methods("GET")
 	r.HandleFunc("/page/{page}", s.MainIndexPage).Methods("GET")
 	r.HandleFunc("/other", s.OtherIndexPage).Methods("GET")
 	r.HandleFunc("/other/page/{page}", s.OtherIndexPage).Methods("GET")
@@ -130,6 +143,14 @@ func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) NewArticleForm(w http.ResponseWriter, r *http.Request) {
+	tmpl := template.Must(template.ParseFiles("static/templates/articleForm.html"))
+	tmpl.Execute(w, struct {
+		Article       Article
+		SlugValueAttr template.HTMLAttr
+	}{Article{}, template.HTMLAttr("")})
+}
+
 func (s *Server) NewArticle(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	checkErr(err)
@@ -144,47 +165,59 @@ func (s *Server) NewArticle(w http.ResponseWriter, r *http.Request) {
 
 	errors := s.ValidateArticle(a)
 	if len(errors) != 0 {
-		w.WriteHeader(400)
+		w.WriteHeader(http.StatusBadRequest)
+		tmpl := template.Must(template.ParseFiles("static/templates/articleForm.html"))
+		tmpl.Execute(w, struct {
+			Article       Article
+			Errors        []string
+			SlugValueAttr template.HTMLAttr
+		}{a, errors, template.HTMLAttr("value=\"" + a.Slug + "\"")})
 		return
 	}
-
+	w.WriteHeader(http.StatusAccepted)
 	s.store.newArticle(a)
+	s.All(w, r)
 }
 
-// Should return all errors.
-func (s *Server) ValidateArticle(a Article) (errors []error) {
+func (s *Server) ValidateArticle(a Article) (errors []string) {
 	// Check each field.
 	// If Title is too long or doesn't exist.
 	maxTitleLength := 50 // Not finalized, test in browser to see when titles look bad.
 	if len([]rune(a.Title)) > maxTitleLength {
-		errors = append(errors, fmt.Errorf("Title too long"))
+		errors = append(errors, errTitleLong)
 	}
 	if len(a.Title) == 0 {
-		errors = append(errors, fmt.Errorf("Title can't be empty"))
+		errors = append(errors, errTitleEmpty)
 	}
 	// If Preview is empty.
 	if len(a.Preview) == 0 {
-		errors = append(errors, fmt.Errorf("Preview can't be empty"))
+		errors = append(errors, errPreviewEmpty)
 	}
 	// If Body is empty.
 	if len(a.Body) == 0 {
-		errors = append(errors, fmt.Errorf("Body can't be empty"))
+		errors = append(errors, errBodyEmpty)
 	}
 	// If Slug contains non-valid characters.
 	if len(a.Slug) == 0 {
-		errors = append(errors, fmt.Errorf("Slug can't be empty"))
+		errors = append(errors, errSlugEmpty)
+	}
+	// If Slug is already in use.
+	if s.store.doesSlugExist(a.Slug) {
+		errors = append(errors, errSlugAlreadyExists)
 	}
 	illegalChars := "&$+,/:;=?@# <>[]{}|\\^%"
+slugCheck:
 	for i := 0; i < len(a.Slug); i++ {
 		for j := 0; j < len(illegalChars); j++ {
 			if a.Slug[i] == illegalChars[j] {
-				errors = append(errors, fmt.Errorf("Slug contains illegal characters"))
+				errors = append(errors, errSlugBad)
+				break slugCheck
 			}
 		}
 	}
 	// If Category is not one of the valid categories.
 	if a.Category != progCat && a.Category != otherCat {
-		errors = append(errors, fmt.Errorf("Category is invalid"))
+		errors = append(errors, errCatInvalid)
 	}
 	return
 }

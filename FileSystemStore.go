@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"os"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -75,7 +76,7 @@ func (f *FileSystemStore) getPage(page int, category string) (articles []Article
 }
 
 func (f *FileSystemStore) getArticle(slug string) Article {
-	rows, err := f.db.Query("SELECT * FROM Article WHERE Slug = ? Limit 1", slug)
+	rows, err := f.db.Query("SELECT * FROM Article WHERE Slug = ? Limit 1", strings.ToLower(slug))
 	checkErr(err)
 	defer rows.Close()
 
@@ -90,17 +91,24 @@ func (f *FileSystemStore) getArticle(slug string) Article {
 }
 
 func (f *FileSystemStore) newArticle(a Article) {
-
+	stmt, err := f.db.Prepare("INSERT INTO Article(Title, Preview, Body, Slug, Published, Edited, Category) values(?, ?, ?, ?, DATETIME(?), ?, ?)")
+	checkErr(err)
+	_, err = stmt.Exec(a.Title, a.Preview, a.Body, strings.ToLower(a.Slug), a.Published, a.Edited, a.Category)
+	checkErr(err)
 }
 
 func (f *FileSystemStore) saveArticles(articles []Article) {
-	stmt, err := f.db.Prepare("INSERT INTO Article(Title, Preview, Body, Slug, Published, Edited, Category) values(?, ?, ?, ?, DATETIME(?), ?, ?)")
-	checkErr(err)
-
 	for _, a := range articles {
-		_, err = stmt.Exec(a.Title, a.Preview, a.Body, a.Slug, a.Published, a.Edited, a.Category)
+		f.newArticle(a)
 	}
-	checkErr(err)
+}
+
+func (f *FileSystemStore) doesSlugExist(slug string) bool {
+	a := f.getArticle(strings.ToLower(slug))
+	if a == (Article{}) {
+		return false
+	}
+	return true
 }
 
 func (f *FileSystemStore) setupDB(dbFile *os.File) {

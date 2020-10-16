@@ -75,7 +75,7 @@ func (f *FileSystemStore) getPage(page int, category string) (articles []Article
 	return f.paginate(reverseArticles(ret), page)
 }
 
-func (f *FileSystemStore) getArticle(slug string) Article {
+func (f *FileSystemStore) getArticle(slug string) (int, Article) {
 	rows, err := f.db.Query("SELECT * FROM Article WHERE Slug = ? Limit 1", strings.ToLower(slug))
 	checkErr(err)
 	defer rows.Close()
@@ -85,15 +85,22 @@ func (f *FileSystemStore) getArticle(slug string) Article {
 		var id int
 		err = rows.Scan(&id, &a.Title, &a.Preview, &a.Body, &a.Slug, &a.Published, &a.Edited, &a.Category)
 		checkErr(err)
-		return a
+		return id, a
 	}
-	return Article{}
+	return 0, Article{}
 }
 
 func (f *FileSystemStore) newArticle(a Article) {
 	stmt, err := f.db.Prepare("INSERT INTO Article(Title, Preview, Body, Slug, Published, Edited, Category) values(?, ?, ?, ?, DATETIME(?), ?, ?)")
 	checkErr(err)
 	_, err = stmt.Exec(a.Title, a.Preview, a.Body, strings.ToLower(a.Slug), a.Published, a.Edited, a.Category)
+	checkErr(err)
+}
+
+func (f *FileSystemStore) editArticle(id int, edited Article) {
+	stmt, err := f.db.Prepare("UPDATE Article SET Title = ?, Preview = ?, Body = ?, Slug = ?, Edited = ?, Category = ? WHERE uid = ?")
+	checkErr(err)
+	_, err = stmt.Exec(edited.Title, edited.Preview, edited.Body, edited.Slug, edited.Edited, edited.Category, id)
 	checkErr(err)
 }
 
@@ -104,12 +111,16 @@ func (f *FileSystemStore) saveArticles(articles []Article) {
 }
 
 func (f *FileSystemStore) doesSlugExist(slug string) bool {
-	a := f.getArticle(strings.ToLower(slug))
+	_, a := f.getArticle(strings.ToLower(slug))
 	if a == (Article{}) {
 		return false
 	}
 	return true
 }
+
+// func (f *FileSystemStore) getIdFromSlug(slug string) int {
+// 	return 0
+// }
 
 func (f *FileSystemStore) setupDB(dbFile *os.File) {
 	fileInfo, err := dbFile.Stat()

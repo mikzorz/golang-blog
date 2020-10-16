@@ -14,10 +14,9 @@
               </div>
               <div class="message-body">
                 <p>{{.Preview}}</p>
-                {{if eq .Published .Edited}}
                 <br>
                 <p class="is-size-6 tag is-white">Published: {{.Published}}</p>
-                {{else}}
+                {{if .IsEdited}}
                 <br>
                 <p class="is-size-6 tag is-white">Last Edited: {{.Edited}}</p>
                 {{end}}
@@ -25,7 +24,7 @@
             </a>
           </article>
           {{ end }}
-        {{else}}
+          {{else}}
           <div class="columns">
             <div class="column" style="border-right: 1px solid #ddd">
               {{ range .Column1 }}

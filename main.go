@@ -12,6 +12,8 @@ const DEV = true
 var base = os.Getenv("GOPATH") + "/src/github.com/mikzorz/blog"
 var dbFileName = base + "blog.db"
 var indexTemplate = setIndexTemplate()
+var viewTemplate = setViewTemplate()
+var formTemplate = setFormTemplate()
 
 const port = 3000
 const progCat = "Programming"

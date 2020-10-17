@@ -12,11 +12,18 @@ import (
 // Move things like reused article structs up here. NOT DONE
 
 var validArticleBase = Article{
-	Title:    "POST me!",
+	Title:    "I am a valid article!",
 	Preview:  "<p>This is a valid preview.</p>",
 	Body:     "<p>This is a valid body of an article.</p>",
 	Slug:     "this-is_a.v4l1d~slug",
 	Category: "Other",
+}
+
+func newValidArticleWithTime() Article {
+	ret := validArticleBase
+	ret.Published = myTimeToString(time.Now().UTC())
+	ret.Edited = myTimeToString(time.Now().UTC())
+	return ret
 }
 
 var editedBase = Article{
@@ -61,6 +68,10 @@ func (s *StubStore) newArticle(a Article) {
 
 func (s *StubStore) editArticle(id int, edited Article) {
 	s.calls = append(s.calls, "edit")
+}
+
+func (s *StubStore) deleteArticle(id int) {
+	s.calls = append(s.calls, "delete")
 }
 
 func (s *StubStore) doesSlugExist(slug string) bool {

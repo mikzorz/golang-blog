@@ -171,5 +171,26 @@ func TestFileSystemStore(t *testing.T) {
 				t.Error("edited time not updated when editing article")
 			}
 		})
+
+		t.Run("delete article", func(t *testing.T) {
+			articles := MakeBothTypesOfArticle(5)
+			toDelete := articles[4]
+
+			tmpFile, cleanTempFile := makeTempFile()
+			defer cleanTempFile()
+
+			store, closeDB := NewFileSystemStore(tmpFile, articles)
+			defer closeDB()
+
+			id, _ := store.getArticle(toDelete.Slug)
+			store.deleteArticle(id)
+
+			_, got := store.getArticle(toDelete.Slug)
+			assertArticle(t, got, Article{})
+
+			if len(store.getAll()) != len(articles)-1 {
+				t.Error("article not deleted")
+			}
+		})
 	})
 }

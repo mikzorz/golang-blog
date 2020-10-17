@@ -43,7 +43,7 @@ func NewFileSystemStore(dbFile *os.File, articles ...[]Article) (*FileSystemStor
 
 func (f *FileSystemStore) getAll() []Article {
 	var ret []Article
-	rows, err := f.db.Query("SELECT * FROM Article")
+	rows, err := f.db.Query("SELECT * FROM Articles")
 	checkErr(err)
 	defer rows.Close()
 
@@ -60,7 +60,7 @@ func (f *FileSystemStore) getAll() []Article {
 
 func (f *FileSystemStore) getPage(page int, category string) (articles []Article, p int, maxPage int) {
 	var ret []Article
-	rows, err := f.db.Query("SELECT * FROM Article WHERE Category = ?", category)
+	rows, err := f.db.Query("SELECT * FROM Articles WHERE Category = ?", category)
 	checkErr(err)
 	defer rows.Close()
 
@@ -76,7 +76,7 @@ func (f *FileSystemStore) getPage(page int, category string) (articles []Article
 }
 
 func (f *FileSystemStore) getArticle(slug string) (int, Article) {
-	rows, err := f.db.Query("SELECT * FROM Article WHERE Slug = ? Limit 1", strings.ToLower(slug))
+	rows, err := f.db.Query("SELECT * FROM Articles WHERE Slug = ? Limit 1", strings.ToLower(slug))
 	checkErr(err)
 	defer rows.Close()
 
@@ -91,16 +91,23 @@ func (f *FileSystemStore) getArticle(slug string) (int, Article) {
 }
 
 func (f *FileSystemStore) newArticle(a Article) {
-	stmt, err := f.db.Prepare("INSERT INTO Article(Title, Preview, Body, Slug, Published, Edited, Category) values(?, ?, ?, ?, DATETIME(?), ?, ?)")
+	stmt, err := f.db.Prepare("INSERT INTO Articles(Title, Preview, Body, Slug, Published, Edited, Category) values(?, ?, ?, ?, DATETIME(?), ?, ?)")
 	checkErr(err)
 	_, err = stmt.Exec(a.Title, a.Preview, a.Body, strings.ToLower(a.Slug), a.Published, a.Edited, a.Category)
 	checkErr(err)
 }
 
 func (f *FileSystemStore) editArticle(id int, edited Article) {
-	stmt, err := f.db.Prepare("UPDATE Article SET Title = ?, Preview = ?, Body = ?, Slug = ?, Edited = ?, Category = ? WHERE uid = ?")
+	stmt, err := f.db.Prepare("UPDATE Articles SET Title = ?, Preview = ?, Body = ?, Slug = ?, Edited = ?, Category = ? WHERE uid = ?")
 	checkErr(err)
 	_, err = stmt.Exec(edited.Title, edited.Preview, edited.Body, edited.Slug, edited.Edited, edited.Category, id)
+	checkErr(err)
+}
+
+func (f *FileSystemStore) deleteArticle(id int) {
+	stmt, err := f.db.Prepare("DELETE FROM Articles WHERE uid = ?")
+	checkErr(err)
+	_, err = stmt.Exec(id)
 	checkErr(err)
 }
 
@@ -131,7 +138,7 @@ func (f *FileSystemStore) setupDB(dbFile *os.File) {
 }
 
 func (f *FileSystemStore) createTable(db *sql.DB) {
-	createArticleTableSQL := `CREATE TABLE Article (
+	createArticleTableSQL := `CREATE TABLE Articles (
     "uid" INTEGER PRIMARY KEY AUTOINCREMENT,
     "Title" VARCHAR(64) NULL,
     "Preview" TEXT NULL,
@@ -148,6 +155,10 @@ func (f *FileSystemStore) createTable(db *sql.DB) {
 
 // Given a slice of articles and a page number, will return that page's articles, the actual current page and the highest page number.
 func (f *FileSystemStore) paginate(a []Article, page int) ([]Article, int, int) {
+	if len(a) <= perPage {
+		return a, 1, 1
+	}
+
 	p := page
 	if page < 1 {
 		p = 1

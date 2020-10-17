@@ -13,9 +13,10 @@ import (
 type Store interface {
 	getAll() []Article
 	getPage(int, string) ([]Article, int, int)
-	getArticle(string) (int, Article)
+	getArticle(slug string) (int, Article)
 	newArticle(Article)
 	editArticle(int, Article)
+	deleteArticle(id int)
 	doesSlugExist(string) bool
 }
 
@@ -41,6 +42,7 @@ func NewServer(store Store) *Server {
 	r.HandleFunc("/all", s.All).Methods("GET")
 	r.HandleFunc("/{slug}", s.ArticleView).Methods("GET")
 	r.HandleFunc("/{slug}", s.EditArticle).Methods("POST") // Cannot send PATCH from html forms
+	r.HandleFunc("/{slug}", s.DeleteArticle).Methods("DELETE")
 	r.HandleFunc("/{slug}/edit", s.EditArticleForm).Methods("GET")
 
 	s.Handler = r
@@ -142,6 +144,18 @@ func (s *Server) EditArticle(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(202)
 		s.store.editArticle(id, edit)
 		articleView(w, edit)
+	}
+}
+
+func (s *Server) DeleteArticle(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	slug := vars["slug"]
+	id, a := s.store.getArticle(slug)
+	if a != (Article{}) {
+		w.WriteHeader(202)
+		s.store.deleteArticle(id)
+	} else {
+		w.WriteHeader(404)
 	}
 }
 

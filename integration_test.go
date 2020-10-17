@@ -87,6 +87,20 @@ func TestWebIntegration(t *testing.T) {
 		assertContains(t, resp.Body.String(), "Last Edited: "+progWant[0].Edited[:10])
 	})
 
+	t.Run("index with only one page", func(t *testing.T) {
+		// No asserts, just see if it works. Caused errors because of out of bounds pagination.
+		articles := MakeArticlesOfCategory(perPage-1, time.Now(), progCat)
+		tmpFile, cleanTempFile := makeTempFile()
+		defer cleanTempFile()
+		store, closeDB := NewFileSystemStore(tmpFile, articles)
+		defer closeDB()
+		server := NewServer(store)
+
+		resp := httptest.NewRecorder()
+		req := newGetRequest(t, "/")
+		server.ServeHTTP(resp, req)
+	})
+
 	t.Run("get view page of single article", func(t *testing.T) {
 		tmpFile, cleanTempFile := makeTempFile()
 		defer cleanTempFile()
@@ -378,6 +392,48 @@ func TestWebIntegration(t *testing.T) {
 			assertContains(t, resp.Body.String(), newA.Body)
 			assertContains(t, resp.Body.String(), newA.Slug)
 			assertContains(t, resp.Body.String(), newA.Category)
+		})
+	})
+
+	t.Run("delete article", func(t *testing.T) {
+		articles := MakeArticlesOfCategory(10, time.Now(), progCat)
+		tmpFile, cleanTempFile := makeTempFile()
+		defer cleanTempFile()
+		store, closeDB := NewFileSystemStore(tmpFile, articles)
+		defer closeDB()
+		server := NewServer(store)
+
+		t.Run("fail to delete non-existing article, receive code 404", func(t *testing.T) {
+			resp := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodDelete, "/does-not-exist", nil)
+			server.ServeHTTP(resp, req)
+
+			assertStatus(t, resp.Code, 404)
+
+			if len(store.getAll()) != len(articles) {
+				t.Error("article should not be deleted")
+			}
+		})
+
+		t.Run("successfully delete existing article, receive code 202", func(t *testing.T) {
+			toDelete := articles[2]
+			resp := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodDelete, "/"+toDelete.Slug, nil)
+
+			server.ServeHTTP(resp, req)
+
+			assertStatus(t, resp.Code, 202)
+
+			if len(store.getAll()) != len(articles)-1 {
+				t.Error("article not deleted")
+			}
+
+			// Go to index to check if article is gone.
+			resp = httptest.NewRecorder()
+			req = newGetRequest(t, "/")
+			server.ServeHTTP(resp, req)
+
+			assertNotContain(t, resp.Body.String(), toDelete.Title)
 		})
 	})
 }

@@ -287,4 +287,33 @@ func TestArticle(t *testing.T) {
 			assertCalls(t, store.calls, []string{"getArticle"})
 		})
 	})
+
+	t.Run("send DELETE req to {slug}", func(t *testing.T) {
+		exists := validArticleBase
+		exists.Slug = "some-article"
+
+		store := StubStore{articles: []Article{exists}}
+		server := NewServer(&store)
+
+		t.Run("202 for existing article", func(t *testing.T) {
+			resp := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodDelete, "/some-article", nil)
+
+			server.ServeHTTP(resp, req)
+
+			assertStatus(t, resp.Code, 202)
+			assertCalls(t, store.calls, []string{"getArticle", "delete"})
+			store.calls = []string{}
+		})
+
+		t.Run("404 for existing article", func(t *testing.T) {
+			resp := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodDelete, "/does-not-exist", nil)
+
+			server.ServeHTTP(resp, req)
+
+			assertStatus(t, resp.Code, 404)
+			assertCalls(t, store.calls, []string{"getArticle"})
+		})
+	})
 }

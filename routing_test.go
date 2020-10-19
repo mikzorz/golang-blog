@@ -161,13 +161,13 @@ func TestArticle(t *testing.T) {
 		data.Set("category", want.Category)
 
 		resp := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+		req, _ := http.NewRequest(http.MethodPost, "/new", strings.NewReader(data.Encode()))
 		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 		server.ServeHTTP(resp, req)
 
-		assertStatus(t, resp.Code, 202)
-		assertCalls(t, store.calls, []string{"new", "getAll"})
+		assertStatus(t, resp.Code, 303)
+		assertCalls(t, store.calls, []string{"new"})
 		if len(store.articles) != 0 {
 			assertArticleWithoutTime(t, store.articles[0], want)
 		} else {
@@ -200,7 +200,7 @@ func TestArticle(t *testing.T) {
 			data.Set("category", notWant.Category)
 
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+			req, _ := http.NewRequest(http.MethodPost, "/new", strings.NewReader(data.Encode()))
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 			server.ServeHTTP(resp, req)
@@ -240,7 +240,7 @@ func TestArticle(t *testing.T) {
 			data.Set("category", empty.Category)
 
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+			req, _ := http.NewRequest(http.MethodPost, "/new", strings.NewReader(data.Encode()))
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 			server.ServeHTTP(resp, req)
@@ -264,23 +264,23 @@ func TestArticle(t *testing.T) {
 		store := StubStore{articles: []Article{article}, calls: []string{}}
 		server := NewServer(&store)
 
-		t.Run("202 when trying to edit existing article with new valid values", func(t *testing.T) {
+		t.Run("303 when editing existing article with new valid values", func(t *testing.T) {
 			editedWant := editedBase
 			data := setDataValues(editedWant)
 
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodPost, "/some-article", strings.NewReader(data.Encode()))
+			req, _ := http.NewRequest(http.MethodPost, "/some-article/edit", strings.NewReader(data.Encode()))
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 			server.ServeHTTP(resp, req)
 
-			assertStatus(t, resp.Code, http.StatusAccepted)
+			assertStatus(t, resp.Code, 303)
 			assertCalls(t, store.calls, []string{"getArticle", "edit"})
 			store.calls = []string{}
 		})
 
 		t.Run("404 when trying to edit inexistent article", func(t *testing.T) {
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodPost, "/does-not-exist", nil)
+			req, _ := http.NewRequest(http.MethodPost, "/does-not-exist/edit", nil)
 			server.ServeHTTP(resp, req)
 
 			assertStatus(t, resp.Code, http.StatusNotFound)
@@ -289,19 +289,19 @@ func TestArticle(t *testing.T) {
 	})
 
 	t.Run("send DELETE req to {slug}", func(t *testing.T) {
-		exists := validArticleBase
+		exists := newValidArticleWithTime()
 		exists.Slug = "some-article"
 
 		store := StubStore{articles: []Article{exists}}
 		server := NewServer(&store)
 
-		t.Run("202 for existing article", func(t *testing.T) {
+		t.Run("200 for existing article", func(t *testing.T) {
 			resp := httptest.NewRecorder()
 			req, _ := http.NewRequest(http.MethodDelete, "/some-article", nil)
 
 			server.ServeHTTP(resp, req)
 
-			assertStatus(t, resp.Code, 202)
+			assertStatus(t, resp.Code, 200)
 			assertCalls(t, store.calls, []string{"getArticle", "delete"})
 			store.calls = []string{}
 		})

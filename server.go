@@ -34,16 +34,16 @@ func NewServer(store Store) *Server {
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(path.Join(base, "/static")))))
 
 	r.HandleFunc("/", s.MainIndexPage).Methods("GET")
-	r.HandleFunc("/", s.NewArticle).Methods("POST")
 	r.HandleFunc("/new", s.NewArticleForm).Methods("GET")
+	r.HandleFunc("/new", s.NewArticle).Methods("POST")
 	r.HandleFunc("/page/{page}", s.MainIndexPage).Methods("GET")
 	r.HandleFunc("/other", s.OtherIndexPage).Methods("GET")
 	r.HandleFunc("/other/page/{page}", s.OtherIndexPage).Methods("GET")
 	r.HandleFunc("/all", s.All).Methods("GET")
 	r.HandleFunc("/{slug}", s.ArticleView).Methods("GET")
-	r.HandleFunc("/{slug}", s.EditArticle).Methods("POST") // Cannot send PATCH from html forms
 	r.HandleFunc("/{slug}", s.DeleteArticle).Methods("DELETE")
 	r.HandleFunc("/{slug}/edit", s.EditArticleForm).Methods("GET")
+	r.HandleFunc("/{slug}/edit", s.EditArticle).Methods("POST") // Cannot send PATCH from html forms
 
 	s.Handler = r
 	return s
@@ -90,8 +90,8 @@ func (s *Server) All(w http.ResponseWriter, r *http.Request) {
 func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	slug := vars["slug"]
-	_, article := s.store.getArticle(slug)
-	if article != (Article{}) {
+	id, article := s.store.getArticle(slug)
+	if id > 0 {
 		articleView(w, article)
 	} else {
 		w.WriteHeader(404)
@@ -100,12 +100,10 @@ func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) NewArticleForm(w http.ResponseWriter, r *http.Request) {
-	executeArticleForm(w, Article{}, template.HTMLAttr(""), "/")
+	executeArticleForm(w, Article{}, template.HTMLAttr(""), "/new")
 }
 
 func (s *Server) NewArticle(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseForm()
-	checkErr(err)
 
 	a := getArticleFromForm(r)
 	a.Published = myTimeToString(time.Now().UTC())
@@ -114,23 +112,32 @@ func (s *Server) NewArticle(w http.ResponseWriter, r *http.Request) {
 	errors := s.ValidateArticle(a, true)
 	if len(errors) != 0 {
 		w.WriteHeader(http.StatusBadRequest)
-		executeArticleForm(w, a, template.HTMLAttr("value=\""+a.Slug+"\""), "/", errors)
+		executeArticleForm(w, a, template.HTMLAttr("value=\""+a.Slug+"\""), "/new", errors)
 		return
 	}
-	w.WriteHeader(http.StatusAccepted)
+	// w.WriteHeader(200)
 	s.store.newArticle(a)
-	s.All(w, r)
+	http.Redirect(w, r, "/all", http.StatusSeeOther)
+}
+
+func (s *Server) EditArticleForm(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	slug := vars["slug"]
+	id, a := s.store.getArticle(slug)
+	if id > 0 {
+		executeArticleForm(w, a, template.HTMLAttr("value=\""+slug+"\""), "/"+slug+"/edit")
+	} else {
+		w.WriteHeader(404)
+	}
 }
 
 func (s *Server) EditArticle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	slug := vars["slug"]
 	id, article := s.store.getArticle(slug)
-	if article == (Article{}) {
+	if id == 0 {
 		w.WriteHeader(404)
 	} else {
-		err := r.ParseForm()
-		checkErr(err)
 		edit := getArticleFromForm(r)
 		edit.Published = article.Published
 		edit.Edited = myTimeToString(time.Now().UTC())
@@ -138,36 +145,25 @@ func (s *Server) EditArticle(w http.ResponseWriter, r *http.Request) {
 		errors := s.ValidateArticle(edit, false)
 		if len(errors) != 0 {
 			w.WriteHeader(http.StatusBadRequest)
-			executeArticleForm(w, edit, template.HTMLAttr("value=\""+edit.Slug+"\""), "/"+article.Slug, errors)
+			executeArticleForm(w, edit, template.HTMLAttr("value=\""+edit.Slug+"\""), "/"+article.Slug+"/edit", errors)
 			return
 		}
-		w.WriteHeader(202)
 		s.store.editArticle(id, edit)
-		articleView(w, edit)
+		http.Redirect(w, r, "/"+edit.Slug, http.StatusSeeOther)
 	}
 }
 
 func (s *Server) DeleteArticle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	slug := vars["slug"]
-	id, a := s.store.getArticle(slug)
-	if a != (Article{}) {
-		w.WriteHeader(202)
+	id, _ := s.store.getArticle(slug)
+	if id > 0 {
 		s.store.deleteArticle(id)
+		w.WriteHeader(200) // 200 because I will render a page afterwards.
 	} else {
 		w.WriteHeader(404)
 	}
-}
-
-func (s *Server) EditArticleForm(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	slug := vars["slug"]
-	_, a := s.store.getArticle(slug)
-	if a != (Article{}) {
-		executeArticleForm(w, a, template.HTMLAttr("value=\""+slug+"\""), "/"+slug)
-	} else {
-		w.WriteHeader(404)
-	}
+	http.Redirect(w, r, "/all", http.StatusSeeOther)
 }
 
 func indexPage(w http.ResponseWriter, a []Article, cat string, curPage, maxPage int) {
@@ -228,10 +224,13 @@ func executeArticleForm(w http.ResponseWriter, a Article, slugValueAttr template
 }
 
 func getArticleFromForm(r *http.Request) Article {
+	err := r.ParseForm()
+	checkErr(err)
+
 	a := Article{Title: r.FormValue("title")}
 	a.Preview = r.FormValue("preview")
 	a.Body = r.FormValue("body")
 	a.Slug = r.FormValue("slug")
-	a.Category = r.FormValue("category")
+	a.Category = r.Form["category"][0]
 	return a
 }

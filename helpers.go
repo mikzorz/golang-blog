@@ -121,7 +121,8 @@ func articleWithoutTime(a Article) Article {
 
 func checkErr(err error) {
 	if err != nil {
-		panic(err)
+		log.Print(err.Error())
+		// panic(err)
 	}
 }
 

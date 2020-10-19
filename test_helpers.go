@@ -55,7 +55,7 @@ func (s *StubStore) getArticle(slug string) (int, Article) {
 	s.calls = append(s.calls, "getArticle")
 	for _, a := range s.articles {
 		if a.Slug == slug {
-			return 0, a
+			return 1, a
 		}
 	}
 	return 0, Article{}

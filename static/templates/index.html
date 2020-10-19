@@ -24,6 +24,7 @@
             </a>
           </article>
           {{ end }}
+          {{template "index-pagination" .}}
           {{else}}
           <div class="columns">
             <div class="column" style="border-right: 1px solid #ddd">
@@ -53,6 +54,7 @@
 {{end}}
 
 {{define "index-pagination"}}{{$curPage := .PageInfo.CurrentPage}}{{$maxPage := .PageInfo.MaxPage}}
+  {{ if ne $maxPage 1 }}
           <nav class="pagination" role="navigation" aria-label="pagination">
             <ul class="pagination-list">
               <li>
@@ -76,4 +78,5 @@
             <a {{if ne $curPage 1}}href={{if eq .Category "Other"}}"/other/page/{{.PageInfo.Prev}}"{{else}}"/page/{{.PageInfo.Prev}}"{{end}}{{else}}disabled{{end}} class="pagination-previous" >&larr;</a>
             <a {{if ne $curPage $maxPage}}href={{if eq .Category "Other"}}"/other/page/{{.PageInfo.Next}}"{{else}}"/page/{{.PageInfo.Next}}"{{end}}{{else}}disabled{{end}} class="pagination-next">&rarr;</a>
           </nav>
+  {{ end }}
 {{end}}

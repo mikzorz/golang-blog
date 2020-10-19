@@ -85,6 +85,7 @@ func TestWebIntegration(t *testing.T) {
 
 		assertContains(t, resp.Body.String(), "Published: "+progWant[0].Published[:10])
 		assertContains(t, resp.Body.String(), "Last Edited: "+progWant[0].Edited[:10])
+		assertContains(t, resp.Body.String(), `<nav class="pagination" role="navigation" aria-label="pagination">`)
 	})
 
 	t.Run("index with only one page", func(t *testing.T) {
@@ -99,6 +100,9 @@ func TestWebIntegration(t *testing.T) {
 		resp := httptest.NewRecorder()
 		req := newGetRequest(t, "/")
 		server.ServeHTTP(resp, req)
+
+		// Check that pagination does not show when only one page exists.
+		assertNotContain(t, resp.Body.String(), `<nav class="pagination" role="navigation" aria-label="pagination">`)
 	})
 
 	t.Run("get view page of single article", func(t *testing.T) {
@@ -138,12 +142,12 @@ func TestWebIntegration(t *testing.T) {
 
 		t.Run("get new article form page", func(t *testing.T) {
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodGet, "/new", nil)
+			req := newGetRequest(t, "/new")
 			server.ServeHTTP(resp, req)
 
 			// does resp contain form? Can I just check if status code is 200?
 			assertStatus(t, resp.Code, 200)
-			assertContains(t, resp.Body.String(), "<form class=\"\" action=\"/\" method=\"post\">")
+			assertContains(t, resp.Body.String(), "<form class=\"\" action=\"/new\" method=\"post\">")
 			assertContains(t, resp.Body.String(), "New Article") // May change this to be more specific.(?)
 		})
 
@@ -163,7 +167,7 @@ func TestWebIntegration(t *testing.T) {
 			data.Set("category", invalidArticle.Category)
 
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+			req, _ := http.NewRequest(http.MethodPost, "/new", strings.NewReader(data.Encode()))
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 			server.ServeHTTP(resp, req)
 
@@ -188,7 +192,7 @@ func TestWebIntegration(t *testing.T) {
 			data.Set("category", newA.Category)
 
 			resp = httptest.NewRecorder()
-			req, _ = http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+			req, _ = http.NewRequest(http.MethodPost, "/new", strings.NewReader(data.Encode()))
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 			server.ServeHTTP(resp, req)
 
@@ -198,7 +202,7 @@ func TestWebIntegration(t *testing.T) {
 			assertContains(t, resp.Body.String(), newA.Preview)
 			assertContains(t, resp.Body.String(), newA.Body)
 			assertContains(t, resp.Body.String(), newA.Slug)
-			assertContains(t, resp.Body.String(), newA.Category)
+			// assertContains(t, resp.Body.String(), newA.Category)
 		})
 
 		t.Run("should be able to submit and save new valid article", func(t *testing.T) {
@@ -211,11 +215,11 @@ func TestWebIntegration(t *testing.T) {
 			data.Set("category", validArticle.Category)
 
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(data.Encode()))
+			req, _ := http.NewRequest(http.MethodPost, "/new", strings.NewReader(data.Encode()))
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 			server.ServeHTTP(resp, req)
 
-			assertStatus(t, resp.Code, http.StatusAccepted)
+			assertStatus(t, resp.Code, 303)
 			_, saved := store.getArticle(validArticle.Slug)
 			if saved != (Article{}) {
 				assertArticleWithoutTime(t, saved, validArticle)
@@ -224,10 +228,13 @@ func TestWebIntegration(t *testing.T) {
 			}
 
 			// Will likely be changed to redirect to admin panel instead of index.
-			// Can I check the url?
+			resp = httptest.NewRecorder()
+			req = newGetRequest(t, "/all")
+
+			server.ServeHTTP(resp, req)
+
 			assertContains(t, resp.Body.String(), "Index")
 			assertContains(t, resp.Body.String(), validArticle.Title)
-			// t.Error("not done, test redirect")
 		})
 
 		t.Run("article with slug that already exists returns error", func(t *testing.T) {
@@ -291,7 +298,7 @@ func TestWebIntegration(t *testing.T) {
 
 			t.Run("article exists", func(t *testing.T) {
 				resp := httptest.NewRecorder()
-				req, _ := http.NewRequest(http.MethodGet, "/"+a.Slug+"/edit", nil)
+				req := newGetRequest(t, "/"+a.Slug+"/edit")
 				server.ServeHTTP(resp, req)
 
 				assertStatus(t, resp.Code, 200)
@@ -300,11 +307,11 @@ func TestWebIntegration(t *testing.T) {
 				assertContains(t, resp.Body.String(), template.HTMLEscapeString(a.Preview)+"</textarea>")
 				assertContains(t, resp.Body.String(), template.HTMLEscapeString(a.Body)+"</textarea>")
 				assertContains(t, resp.Body.String(), "<input type=\"text\" name=\"slug\" value=\""+a.Slug+"\">")
-				assertContains(t, resp.Body.String(), "<input type=\"text\" name=\"category\" value=\""+a.Category+"\">")
+				// assertContains(t, resp.Body.String(), "<input type=\"text\" name=\"category\" value=\""+a.Category+"\">")
 			})
 			t.Run("article does not exist", func(t *testing.T) {
 				resp := httptest.NewRecorder()
-				req, _ := http.NewRequest(http.MethodGet, "/does-not-exist/edit", nil)
+				req := newGetRequest(t, "/does-not-exist/edit")
 				server.ServeHTTP(resp, req)
 
 				assertStatus(t, resp.Code, 404)
@@ -321,11 +328,16 @@ func TestWebIntegration(t *testing.T) {
 			edit := editedBase
 			data := setDataValues(edit)
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodPost, "/"+a.Slug, strings.NewReader(data.Encode()))
+			req, _ := http.NewRequest(http.MethodPost, "/"+a.Slug+"/edit", strings.NewReader(data.Encode()))
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 			server.ServeHTTP(resp, req)
 
-			// after successful edit, render view of article. TEMP
+			// Don't know how to test pages after redirecting, if it's even possible
+			// After successful edit, get view of article. TEMP. Will redirect to admin panel in future.
+			resp = httptest.NewRecorder()
+			req = newGetRequest(t, "/"+edit.Slug)
+			server.ServeHTTP(resp, req)
+
 			assertContains(t, resp.Body.String(), "<article class=\"content\">")
 			assertContains(t, resp.Body.String(), edit.Title)
 			assertContains(t, resp.Body.String(), "Published: "+a.Published[:10])
@@ -356,7 +368,7 @@ func TestWebIntegration(t *testing.T) {
 			data.Set("category", invalidArticle.Category)
 
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodPost, "/"+a.Slug, strings.NewReader(data.Encode()))
+			req, _ := http.NewRequest(http.MethodPost, "/"+a.Slug+"/edit", strings.NewReader(data.Encode()))
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 			server.ServeHTTP(resp, req)
 
@@ -381,7 +393,7 @@ func TestWebIntegration(t *testing.T) {
 			data.Set("category", newA.Category)
 
 			resp = httptest.NewRecorder()
-			req, _ = http.NewRequest(http.MethodPost, "/"+a.Slug, strings.NewReader(data.Encode()))
+			req, _ = http.NewRequest(http.MethodPost, "/"+a.Slug+"/edit", strings.NewReader(data.Encode()))
 			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 			server.ServeHTTP(resp, req)
 
@@ -391,7 +403,7 @@ func TestWebIntegration(t *testing.T) {
 			assertContains(t, resp.Body.String(), newA.Preview)
 			assertContains(t, resp.Body.String(), newA.Body)
 			assertContains(t, resp.Body.String(), newA.Slug)
-			assertContains(t, resp.Body.String(), newA.Category)
+			// assertContains(t, resp.Body.String(), newA.Category)
 		})
 	})
 
@@ -415,14 +427,14 @@ func TestWebIntegration(t *testing.T) {
 			}
 		})
 
-		t.Run("successfully delete existing article, receive code 202", func(t *testing.T) {
+		t.Run("successfully delete existing article, receive code 200", func(t *testing.T) {
 			toDelete := articles[2]
 			resp := httptest.NewRecorder()
 			req, _ := http.NewRequest(http.MethodDelete, "/"+toDelete.Slug, nil)
 
 			server.ServeHTTP(resp, req)
 
-			assertStatus(t, resp.Code, 202)
+			assertStatus(t, resp.Code, 200)
 
 			if len(store.getAll()) != len(articles)-1 {
 				t.Error("article not deleted")

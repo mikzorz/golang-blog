@@ -17,9 +17,10 @@ func TestWebIntegration(t *testing.T) {
 		defer cleanTempFile()
 		articles := MakeBothTypesOfArticle(20)
 
-		store, closeDB := NewFileSystemStore(tmpFile, articles)
+		store, closeDB := NewFileSystemStore(tmpFile, articles, []User{})
 		defer closeDB()
-		server := NewServer(store)
+		sessStore := StubSessionStore{}
+		server := NewServer(store, &sessStore)
 
 		resp := httptest.NewRecorder()
 		req := newGetRequest(t, "/all")
@@ -43,9 +44,10 @@ func TestWebIntegration(t *testing.T) {
 
 		articles := append(progWant, otherWant...)
 
-		store, closeDB := NewFileSystemStore(tmpFile, articles)
+		store, closeDB := NewFileSystemStore(tmpFile, articles, []User{})
 		defer closeDB()
-		server := NewServer(store)
+		sessStore := StubSessionStore{}
+		server := NewServer(store, &sessStore)
 
 		progWant, otherWant = reverseArticles(progWant), reverseArticles(otherWant)
 
@@ -93,9 +95,10 @@ func TestWebIntegration(t *testing.T) {
 		articles := MakeArticlesOfCategory(perPage-1, time.Now(), progCat)
 		tmpFile, cleanTempFile := makeTempFile()
 		defer cleanTempFile()
-		store, closeDB := NewFileSystemStore(tmpFile, articles)
+		store, closeDB := NewFileSystemStore(tmpFile, articles, []User{})
 		defer closeDB()
-		server := NewServer(store)
+		sessStore := StubSessionStore{}
+		server := NewServer(store, &sessStore)
 
 		resp := httptest.NewRecorder()
 		req := newGetRequest(t, "/")
@@ -110,9 +113,10 @@ func TestWebIntegration(t *testing.T) {
 		defer cleanTempFile()
 		articles := MakeArticlesOfCategory(10, time.Now().UTC(), progCat)
 
-		store, closeDB := NewFileSystemStore(tmpFile, articles)
+		store, closeDB := NewFileSystemStore(tmpFile, articles, []User{})
 		defer closeDB()
-		server := NewServer(store)
+		sessStore := StubSessionStore{}
+		server := NewServer(store, &sessStore)
 
 		// Valid article
 		resp := httptest.NewRecorder()
@@ -136,11 +140,21 @@ func TestWebIntegration(t *testing.T) {
 	t.Run("new article submission", func(t *testing.T) {
 		tmpFile, cleanTempFile := makeTempFile()
 		defer cleanTempFile()
-		store, closeDB := NewFileSystemStore(tmpFile)
+		store, closeDB := NewFileSystemStore(tmpFile, []Article{}, []User{admin})
 		defer closeDB()
-		server := NewServer(store)
+		sessStore := StubSessionStore{}
+		server := NewServer(store, &sessStore)
 
-		t.Run("get new article form page", func(t *testing.T) {
+		t.Run("401 on GET /new if not logged in", func(t *testing.T) {
+			resp := httptest.NewRecorder()
+			req := newGetRequest(t, "/new")
+			server.ServeHTTP(resp, req)
+
+			assertStatus(t, resp.Code, 401)
+		})
+
+		t.Run("200 on GET /new if logged in", func(t *testing.T) {
+			testLogin(t, server)
 			resp := httptest.NewRecorder()
 			req := newGetRequest(t, "/new")
 			server.ServeHTTP(resp, req)
@@ -292,11 +306,21 @@ func TestWebIntegration(t *testing.T) {
 
 			tmpFile, cleanTempFile := makeTempFile()
 			defer cleanTempFile()
-			store, closeDB := NewFileSystemStore(tmpFile, []Article{a})
+			store, closeDB := NewFileSystemStore(tmpFile, []Article{a}, []User{admin})
 			defer closeDB()
-			server := NewServer(store)
+			sessStore := StubSessionStore{}
+			server := NewServer(store, &sessStore)
+
+			t.Run("401 on GET /{slug}/edit if not logged in", func(t *testing.T) {
+				resp := httptest.NewRecorder()
+				req := newGetRequest(t, "/"+a.Slug+"/edit")
+				server.ServeHTTP(resp, req)
+
+				assertStatus(t, resp.Code, 401)
+			})
 
 			t.Run("article exists", func(t *testing.T) {
+				testLogin(t, server)
 				resp := httptest.NewRecorder()
 				req := newGetRequest(t, "/"+a.Slug+"/edit")
 				server.ServeHTTP(resp, req)
@@ -318,41 +342,26 @@ func TestWebIntegration(t *testing.T) {
 			})
 		})
 
-		t.Run("successfully edit existing article", func(t *testing.T) {
-			tmpFile, cleanTempFile := makeTempFile()
-			defer cleanTempFile()
-			store, closeDB := NewFileSystemStore(tmpFile, []Article{a})
-			defer closeDB()
-			server := NewServer(store)
+		tmpFile, cleanTempFile := makeTempFile()
+		defer cleanTempFile()
+		store, closeDB := NewFileSystemStore(tmpFile, []Article{a}, []User{admin})
+		defer closeDB()
+		sessStore := StubSessionStore{}
+		server := NewServer(store, &sessStore)
 
+		t.Run("401 on POST /{slug}/edit if not logged in", func(t *testing.T) {
 			edit := editedBase
 			data := setDataValues(edit)
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodPost, "/"+a.Slug+"/edit", strings.NewReader(data.Encode()))
-			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			req := newPostRequest(t, "/"+a.Slug+"/edit", data)
 			server.ServeHTTP(resp, req)
 
-			// Don't know how to test pages after redirecting, if it's even possible
-			// After successful edit, get view of article. TEMP. Will redirect to admin panel in future.
-			resp = httptest.NewRecorder()
-			req = newGetRequest(t, "/"+edit.Slug)
-			server.ServeHTTP(resp, req)
-
-			assertContains(t, resp.Body.String(), "<article class=\"content\">")
-			assertContains(t, resp.Body.String(), edit.Title)
-			assertContains(t, resp.Body.String(), "Published: "+a.Published[:10])
-			assertContains(t, resp.Body.String(), "Last Edited: "+myTimeToString(time.Now().UTC())[:10])
-			assertContains(t, resp.Body.String(), edit.Body)
-			assertNotContain(t, resp.Body.String(), errSlugAlreadyExists)
+			assertStatus(t, resp.Code, 401)
 		})
 
-		t.Run("failing to edit article shows validation errors and retains edited fields", func(t *testing.T) {
-			tmpFile, cleanTempFile := makeTempFile()
-			defer cleanTempFile()
-			store, closeDB := NewFileSystemStore(tmpFile, []Article{a})
-			defer closeDB()
-			server := NewServer(store)
+		testLogin(t, server)
 
+		t.Run("failing to edit article shows validation errors and retains edited fields", func(t *testing.T) {
 			invalidArticle := Article{
 				Title:    strings.Repeat("this is an invalid title ", 100),
 				Preview:  "",
@@ -360,16 +369,10 @@ func TestWebIntegration(t *testing.T) {
 				Slug:     "&$+,/:;=?@# <>[]{}|\\^%",
 				Category: "invalid-category",
 			}
-			data := url.Values{}
-			data.Set("title", invalidArticle.Title)
-			data.Set("preview", invalidArticle.Preview)
-			data.Set("body", invalidArticle.Body)
-			data.Set("slug", invalidArticle.Slug)
-			data.Set("category", invalidArticle.Category)
+			data := setDataValues(invalidArticle)
 
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodPost, "/"+a.Slug+"/edit", strings.NewReader(data.Encode()))
-			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			req := newPostRequest(t, "/"+a.Slug+"/edit", data)
 			server.ServeHTTP(resp, req)
 
 			assertStatus(t, resp.Code, 400)
@@ -385,16 +388,10 @@ func TestWebIntegration(t *testing.T) {
 			newA.Preview = "Valid Preview"
 			newA.Body = "Valid Body"
 
-			data = url.Values{}
-			data.Set("title", newA.Title)
-			data.Set("preview", newA.Preview)
-			data.Set("body", newA.Body)
-			data.Set("slug", newA.Slug)
-			data.Set("category", newA.Category)
+			data = setDataValues(newA)
 
 			resp = httptest.NewRecorder()
-			req, _ = http.NewRequest(http.MethodPost, "/"+a.Slug+"/edit", strings.NewReader(data.Encode()))
-			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			req = newPostRequest(t, "/"+a.Slug+"/edit", data)
 			server.ServeHTTP(resp, req)
 
 			assertStatus(t, resp.Code, 400)
@@ -405,15 +402,49 @@ func TestWebIntegration(t *testing.T) {
 			assertContains(t, resp.Body.String(), newA.Slug)
 			// assertContains(t, resp.Body.String(), newA.Category)
 		})
+
+		t.Run("successfully edit existing article", func(t *testing.T) {
+			edit := editedBase
+			data := setDataValues(edit)
+			resp := httptest.NewRecorder()
+			req := newPostRequest(t, "/"+a.Slug+"/edit", data)
+			server.ServeHTTP(resp, req)
+
+			// Don't know how to test pages after redirecting, if it's even possible
+			// After successful edit, get view of article. TEMP. Will redirect to admin panel in future.
+			resp = httptest.NewRecorder()
+			req = newGetRequest(t, "/"+edit.Slug)
+			server.ServeHTTP(resp, req)
+
+			assertContains(t, resp.Body.String(), "<article class=\"content\">")
+			assertContains(t, resp.Body.String(), edit.Title)
+			assertContains(t, resp.Body.String(), "Published: "+a.Published[:10])
+			assertContains(t, resp.Body.String(), "Last Edited: "+myTimeToString(time.Now().UTC())[:10])
+			assertContains(t, resp.Body.String(), edit.Body)
+			assertNotContain(t, resp.Body.String(), errSlugAlreadyExists)
+		})
 	})
 
 	t.Run("delete article", func(t *testing.T) {
 		articles := MakeArticlesOfCategory(10, time.Now(), progCat)
 		tmpFile, cleanTempFile := makeTempFile()
 		defer cleanTempFile()
-		store, closeDB := NewFileSystemStore(tmpFile, articles)
+		store, closeDB := NewFileSystemStore(tmpFile, articles, []User{admin})
 		defer closeDB()
-		server := NewServer(store)
+		sessStore := StubSessionStore{}
+		server := NewServer(store, &sessStore)
+
+		toDelete := articles[2]
+
+		t.Run("401 on DELETE /{slug}/delete if not logged in", func(t *testing.T) {
+			resp := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodDelete, "/"+toDelete.Slug, nil)
+			server.ServeHTTP(resp, req)
+
+			assertStatus(t, resp.Code, 401)
+		})
+
+		testLogin(t, server)
 
 		t.Run("fail to delete non-existing article, receive code 404", func(t *testing.T) {
 			resp := httptest.NewRecorder()
@@ -428,7 +459,6 @@ func TestWebIntegration(t *testing.T) {
 		})
 
 		t.Run("successfully delete existing article, receive code 200", func(t *testing.T) {
-			toDelete := articles[2]
 			resp := httptest.NewRecorder()
 			req, _ := http.NewRequest(http.MethodDelete, "/"+toDelete.Slug, nil)
 

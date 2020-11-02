@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -13,7 +14,7 @@ type FileSystemStore struct {
 	db *sql.DB
 }
 
-func NewFileSystemStore(dbFile *os.File, articles ...[]Article) (*FileSystemStore, func()) {
+func NewFileSystemStore(dbFile *os.File, articles []Article, users []User) (*FileSystemStore, func()) {
 	f := new(FileSystemStore)
 
 	if dbFile == nil {
@@ -26,9 +27,13 @@ func NewFileSystemStore(dbFile *os.File, articles ...[]Article) (*FileSystemStor
 		// If dbFile is empty, setup db.
 		f.setupDB(dbFile)
 
+		if users != nil {
+			f.saveUsers(users)
+		}
+
 		if articles != nil {
 			if len(f.getAll()) == 0 {
-				f.saveArticles(articles[0])
+				f.saveArticles(articles)
 			}
 		} else {
 			// log.Print("no articles given to NewFileSystemStore")
@@ -129,15 +134,44 @@ func (f *FileSystemStore) doesSlugExist(slug string) bool {
 // 	return 0
 // }
 
+// User
+
+func (f *FileSystemStore) newUser(u User) {
+	stmt, err := f.db.Prepare("INSERT INTO Users(Username, Email, Password_Hash) values(?, ?, ?)")
+	checkErr(err)
+	_, err = stmt.Exec(u.Username, u.Email, u.Password_Hash)
+	checkErr(err)
+}
+
+func (f *FileSystemStore) saveUsers(users []User) {
+	for _, u := range users {
+		f.newUser(u)
+	}
+}
+
+func (f *FileSystemStore) getUser(username, password string) (User, error) {
+	rows, err := f.db.Query("SELECT * FROM Users WHERE Username = ? Limit 1", username)
+	checkErr(err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var u User
+		err = rows.Scan(&u.Id, &u.Username, &u.Email, &u.Password_Hash)
+		checkErr(err)
+		return u, nil
+	}
+	return User{}, fmt.Errorf("user does not exist")
+}
+
 func (f *FileSystemStore) setupDB(dbFile *os.File) {
 	fileInfo, err := dbFile.Stat()
 	checkErr(err)
 	if fileInfo.Size() == 0 {
-		f.createTable(f.db)
+		f.createTables(f.db)
 	}
 }
 
-func (f *FileSystemStore) createTable(db *sql.DB) {
+func (f *FileSystemStore) createTables(db *sql.DB) {
 	createArticleTableSQL := `CREATE TABLE Articles (
     "uid" INTEGER PRIMARY KEY AUTOINCREMENT,
     "Title" VARCHAR(64) NULL,
@@ -149,6 +183,16 @@ func (f *FileSystemStore) createTable(db *sql.DB) {
     "Category" VARCHAR(64) NULL
   );`
 	stmt, err := db.Prepare(createArticleTableSQL)
+	checkErr(err)
+	stmt.Exec()
+
+	createUserTableSQL := `CREATE TABLE Users (
+		"uid" INTEGER PRIMARY KEY AUTOINCREMENT,
+		"Username" VARCHAR(64) NULL,
+		"Email" VARCHAR(64) NULL,
+		"Password_Hash" VARCHAR(255) NULL
+	);`
+	stmt, err = db.Prepare(createUserTableSQL)
 	checkErr(err)
 	stmt.Exec()
 }

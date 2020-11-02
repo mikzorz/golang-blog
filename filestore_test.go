@@ -13,11 +13,11 @@ func TestFileSystemStore(t *testing.T) {
 			defer cleanTempFile()
 
 			articles := MakeBothTypesOfArticle(25)
-			_, closeDB := NewFileSystemStore(tmpFile, articles)
+			_, closeDB := NewFileSystemStore(tmpFile, articles, []User{})
 			closeDB()
 
 			// Normal load, check if 50 articles exist
-			store, closeDB := NewFileSystemStore(tmpFile)
+			store, closeDB := NewFileSystemStore(tmpFile, []Article{}, []User{})
 
 			got := store.getAll()
 
@@ -29,7 +29,7 @@ func TestFileSystemStore(t *testing.T) {
 
 			// Because tmpFile is not empty, ignore articles, check if 50 articles exist
 			articles = MakeBothTypesOfArticle(25)
-			store, closeDB = NewFileSystemStore(tmpFile, articles)
+			store, closeDB = NewFileSystemStore(tmpFile, articles, []User{})
 			defer closeDB()
 
 			got = store.getAll()
@@ -42,12 +42,12 @@ func TestFileSystemStore(t *testing.T) {
 			tmpFile, cleanTempFile := makeTempFile()
 			defer cleanTempFile()
 
-			_, closeDB := NewFileSystemStore(tmpFile)
+			_, closeDB := NewFileSystemStore(tmpFile, []Article{}, []User{})
 			closeDB()
 			// Blank db setup finished.
 
 			articles := MakeBothTypesOfArticle(25)
-			store, closeDB := NewFileSystemStore(tmpFile, articles)
+			store, closeDB := NewFileSystemStore(tmpFile, articles, []User{})
 			defer closeDB()
 
 			got := store.getAll()
@@ -64,7 +64,7 @@ func TestFileSystemStore(t *testing.T) {
 			defer cleanTempFile()
 
 			articles := MakeBothTypesOfArticle(50)
-			store, closeDB := NewFileSystemStore(tmpFile, articles)
+			store, closeDB := NewFileSystemStore(tmpFile, articles, []User{})
 			defer closeDB()
 
 			got := store.getAll()
@@ -77,7 +77,7 @@ func TestFileSystemStore(t *testing.T) {
 			defer cleanTempFile()
 
 			progWant, otherWant := MakeSeparatedArticles(50)
-			store, closeDB := NewFileSystemStore(tmpFile, append(progWant, otherWant...))
+			store, closeDB := NewFileSystemStore(tmpFile, append(progWant, otherWant...), []User{})
 			defer closeDB()
 
 			progWant = reverseArticles(progWant)
@@ -113,7 +113,7 @@ func TestFileSystemStore(t *testing.T) {
 			defer cleanTempFile()
 
 			prog, other := MakeSeparatedArticles(20)
-			store, closeDB := NewFileSystemStore(tmpFile, append(prog, other...))
+			store, closeDB := NewFileSystemStore(tmpFile, append(prog, other...), []User{})
 			defer closeDB()
 
 			_, got := store.getArticle(prog[0].Slug)
@@ -127,7 +127,7 @@ func TestFileSystemStore(t *testing.T) {
 			tmpFile, cleanTempFile := makeTempFile()
 			defer cleanTempFile()
 
-			store, closeDB := NewFileSystemStore(tmpFile)
+			store, closeDB := NewFileSystemStore(tmpFile, []Article{}, []User{})
 			defer closeDB()
 
 			validArticle := validArticleBase
@@ -149,7 +149,7 @@ func TestFileSystemStore(t *testing.T) {
 			tmpFile, cleanTempFile := makeTempFile()
 			defer cleanTempFile()
 
-			store, closeDB := NewFileSystemStore(tmpFile, []Article{old})
+			store, closeDB := NewFileSystemStore(tmpFile, []Article{old}, []User{})
 			defer closeDB()
 
 			want := editedBase
@@ -179,7 +179,7 @@ func TestFileSystemStore(t *testing.T) {
 			tmpFile, cleanTempFile := makeTempFile()
 			defer cleanTempFile()
 
-			store, closeDB := NewFileSystemStore(tmpFile, articles)
+			store, closeDB := NewFileSystemStore(tmpFile, articles, []User{})
 			defer closeDB()
 
 			id, _ := store.getArticle(toDelete.Slug)

@@ -12,7 +12,8 @@ import (
 func TestArticle(t *testing.T) {
 	t.Run("get all, routing", func(t *testing.T) {
 		store := StubStore{calls: []string{}}
-		server := NewServer(&store)
+		sessStore := StubSessionStore{}
+		server := NewServer(&store, &sessStore)
 
 		resp := httptest.NewRecorder()
 		req := newGetRequest(t, "/all")
@@ -25,7 +26,8 @@ func TestArticle(t *testing.T) {
 
 	t.Run("get pages of articles, routing", func(t *testing.T) {
 		store := StubStore{calls: []string{}}
-		server := NewServer(&store)
+		sessStore := StubSessionStore{}
+		server := NewServer(&store, &sessStore)
 
 		cases := []struct {
 			path string
@@ -63,7 +65,8 @@ func TestArticle(t *testing.T) {
 		articles := MakeArticlesOfCategory(10, time.Now().UTC(), progCat)
 
 		store := StubStore{articles: articles, calls: []string{}}
-		server := NewServer(&store)
+		sessStore := StubSessionStore{}
+		server := NewServer(&store, &sessStore)
 
 		// Valid article
 		resp := httptest.NewRecorder()
@@ -92,7 +95,8 @@ func TestArticle(t *testing.T) {
 		article := MakeArticleOfCategory(1, time.Now().UTC(), progCat)
 
 		store := StubStore{articles: []Article{article}}
-		server := NewServer(&store)
+		sessStore := StubSessionStore{}
+		server := NewServer(&store, &sessStore)
 
 		t.Run("main index page", func(t *testing.T) {
 			resp := httptest.NewRecorder()
@@ -119,7 +123,8 @@ func TestArticle(t *testing.T) {
 			article := MakeArticleOfCategory(1, time.Now().UTC(), otherCat)
 
 			store := StubStore{articles: []Article{article}}
-			server := NewServer(&store)
+			sessStore := StubSessionStore{}
+			server := NewServer(&store, &sessStore)
 
 			resp := httptest.NewRecorder()
 			req := newGetRequest(t, "/other")
@@ -149,17 +154,22 @@ func TestArticle(t *testing.T) {
 
 	t.Run("POST new valid article to /", func(t *testing.T) {
 		store := StubStore{articles: []Article{}}
-		server := NewServer(&store)
+		sessStore := StubSessionStore{Sesh{}}
+		server := NewServer(&store, &sessStore)
 
 		want := validArticleBase
 
-		data := url.Values{}
-		data.Set("title", want.Title)
-		data.Set("preview", want.Preview)
-		data.Set("body", want.Body)
-		data.Set("slug", want.Slug)
-		data.Set("category", want.Category)
+		data := setDataValues(validArticleBase)
 
+		t.Run("401 on POST /new if not logged in", func(t *testing.T) {
+			resp := httptest.NewRecorder()
+			req := newPostRequest(t, "/new", data)
+			server.ServeHTTP(resp, req)
+
+			assertStatus(t, resp.Code, 401)
+		})
+
+		sessStore.sesh.Authenticated = true
 		resp := httptest.NewRecorder()
 		req, _ := http.NewRequest(http.MethodPost, "/new", strings.NewReader(data.Encode()))
 		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -177,7 +187,8 @@ func TestArticle(t *testing.T) {
 
 	t.Run("fail to POST new invalid article to /", func(t *testing.T) {
 		store := StubStore{articles: []Article{}, calls: []string{}}
-		server := NewServer(&store)
+		sessStore := StubSessionStore{Sesh{Authenticated: true}}
+		server := NewServer(&store, &sessStore)
 
 		invalidArticles := []Article{}
 		for i := 0; i < 5; i++ {
@@ -217,7 +228,8 @@ func TestArticle(t *testing.T) {
 
 	t.Run("fail to POST new empty article to /", func(t *testing.T) {
 		store := StubStore{articles: []Article{}, calls: []string{}}
-		server := NewServer(&store)
+		sessStore := StubSessionStore{Sesh{Authenticated: true}}
+		server := NewServer(&store, &sessStore)
 
 		invalidArticles := []Article{}
 		for i := 0; i < 5; i++ {
@@ -232,12 +244,7 @@ func TestArticle(t *testing.T) {
 
 		for i := 0; i < len(invalidArticles); i++ {
 			empty := invalidArticles[i]
-			data := url.Values{}
-			data.Set("title", empty.Title)
-			data.Set("preview", empty.Preview)
-			data.Set("body", empty.Body)
-			data.Set("slug", empty.Slug)
-			data.Set("category", empty.Category)
+			data := setDataValues(empty)
 
 			resp := httptest.NewRecorder()
 			req, _ := http.NewRequest(http.MethodPost, "/new", strings.NewReader(data.Encode()))
@@ -262,7 +269,8 @@ func TestArticle(t *testing.T) {
 		article.Edited = myTimeToString(time.Now().UTC())
 
 		store := StubStore{articles: []Article{article}, calls: []string{}}
-		server := NewServer(&store)
+		sessStore := StubSessionStore{Sesh{Authenticated: true}}
+		server := NewServer(&store, &sessStore)
 
 		t.Run("303 when editing existing article with new valid values", func(t *testing.T) {
 			editedWant := editedBase
@@ -293,7 +301,8 @@ func TestArticle(t *testing.T) {
 		exists.Slug = "some-article"
 
 		store := StubStore{articles: []Article{exists}}
-		server := NewServer(&store)
+		sessStore := StubSessionStore{Sesh{Authenticated: true}}
+		server := NewServer(&store, &sessStore)
 
 		t.Run("200 for existing article", func(t *testing.T) {
 			resp := httptest.NewRecorder()

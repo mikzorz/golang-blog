@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
 )
 
 type Store interface {
@@ -18,16 +20,29 @@ type Store interface {
 	editArticle(int, Article)
 	deleteArticle(id int)
 	doesSlugExist(string) bool
+	getUser(username, password string) (User, error)
+}
+
+type SessionStore interface {
+	Get(r *http.Request, cookie_name string) (*sessions.Session, error)
+	Set(*sessions.Session, Sesh)
+	SaveSession(*http.Request, http.ResponseWriter, *sessions.Session) error
+	getSesh(session *sessions.Session) Sesh
+	SetOption(session *sessions.Session, option string, value interface{})
+	// isLoggedIn(w http.ResponseWriter, r *http.Request) bool
 }
 
 type Server struct {
 	store Store
 	http.Handler
+	sessionStore SessionStore
 }
 
-func NewServer(store Store) *Server {
+func NewServer(store Store, sessStore SessionStore) *Server {
 	s := new(Server)
 	s.store = store
+	s.sessionStore = sessStore
+	gob.Register(Sesh{})
 
 	r := mux.NewRouter()
 	// r.PathPrefix("/static/css/").Handler(http.StripPrefix("/static/css/", http.FileServer(http.Dir(path.Join(base, "/static/css")))))
@@ -40,12 +55,19 @@ func NewServer(store Store) *Server {
 	r.HandleFunc("/other", s.OtherIndexPage).Methods("GET")
 	r.HandleFunc("/other/page/{page}", s.OtherIndexPage).Methods("GET")
 	r.HandleFunc("/all", s.All).Methods("GET")
+
+	r.HandleFunc("/admin", s.AdminPanel).Methods("GET")
+	r.HandleFunc("/admin/login", s.LoginPage).Methods("GET")
+	r.HandleFunc("/admin/login", s.AdminLogin).Methods("POST")
+	r.HandleFunc("/admin/logout", s.AdminLogout).Methods("POST")
+
 	r.HandleFunc("/{slug}", s.ArticleView).Methods("GET")
 	r.HandleFunc("/{slug}", s.DeleteArticle).Methods("DELETE")
 	r.HandleFunc("/{slug}/edit", s.EditArticleForm).Methods("GET")
-	r.HandleFunc("/{slug}/edit", s.EditArticle).Methods("POST") // Cannot send PATCH from html forms
+	r.HandleFunc("/{slug}/edit", s.EditArticle).Methods("POST")
 
 	s.Handler = r
+
 	return s
 }
 
@@ -56,7 +78,7 @@ func (s *Server) MainIndexPage(w http.ResponseWriter, r *http.Request) {
 	if DEV {
 		indexTemplate = setIndexTemplate()
 	}
-	indexPage(w, articles, progCat, page, maxPage)
+	indexPage(w, articles, progCat, page, maxPage, s.isAuth(r))
 }
 
 func (s *Server) OtherIndexPage(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +88,7 @@ func (s *Server) OtherIndexPage(w http.ResponseWriter, r *http.Request) {
 	if DEV {
 		indexTemplate = setIndexTemplate()
 	}
-	indexPage(w, articles, otherCat, page, maxPage)
+	indexPage(w, articles, otherCat, page, maxPage, s.isAuth(r))
 }
 
 func (s *Server) All(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +106,8 @@ func (s *Server) All(w http.ResponseWriter, r *http.Request) {
 		Column1  []Article
 		Column2  []Article
 		Category string
-	}{articles[:len(articles)/2], articles[len(articles)/2:], ""})
+		LoggedIn bool
+	}{articles[:len(articles)/2], articles[len(articles)/2:], "", s.isAuth(r)})
 }
 
 func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +115,7 @@ func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {
 	slug := vars["slug"]
 	id, article := s.store.getArticle(slug)
 	if id > 0 {
-		articleView(w, article)
+		articleView(w, article, s.isAuth(r))
 	} else {
 		w.WriteHeader(404)
 		fmt.Fprint(w, "404 not found")
@@ -100,137 +123,154 @@ func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) NewArticleForm(w http.ResponseWriter, r *http.Request) {
-	executeArticleForm(w, Article{}, template.HTMLAttr(""), "/new")
+	if s.isAuth(r) {
+		executeArticleForm(w, Article{}, template.HTMLAttr(""), "/new", s.isAuth(r))
+	} else {
+		w.WriteHeader(401)
+	}
 }
 
 func (s *Server) NewArticle(w http.ResponseWriter, r *http.Request) {
+	if s.isAuth(r) {
+		a := getArticleFromForm(r)
+		a.Published = myTimeToString(time.Now().UTC())
+		a.Edited = a.Published
 
-	a := getArticleFromForm(r)
-	a.Published = myTimeToString(time.Now().UTC())
-	a.Edited = a.Published
-
-	errors := s.ValidateArticle(a, true)
-	if len(errors) != 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		executeArticleForm(w, a, template.HTMLAttr("value=\""+a.Slug+"\""), "/new", errors)
-		return
+		errors := s.ValidateArticle(a, true)
+		if len(errors) != 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			executeArticleForm(w, a, template.HTMLAttr("value=\""+a.Slug+"\""), "/new", s.isAuth(r), errors)
+			return
+		}
+		// w.WriteHeader(200)
+		s.store.newArticle(a)
+		http.Redirect(w, r, "/all", http.StatusSeeOther)
+	} else {
+		w.WriteHeader(401)
 	}
-	// w.WriteHeader(200)
-	s.store.newArticle(a)
-	http.Redirect(w, r, "/all", http.StatusSeeOther)
 }
 
 func (s *Server) EditArticleForm(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	slug := vars["slug"]
-	id, a := s.store.getArticle(slug)
-	if id > 0 {
-		executeArticleForm(w, a, template.HTMLAttr("value=\""+slug+"\""), "/"+slug+"/edit")
+	if s.isAuth(r) {
+		vars := mux.Vars(r)
+		slug := vars["slug"]
+		id, a := s.store.getArticle(slug)
+		if id > 0 {
+			executeArticleForm(w, a, template.HTMLAttr("value=\""+slug+"\""), "/"+slug+"/edit", s.isAuth(r))
+		} else {
+			w.WriteHeader(404)
+		}
 	} else {
-		w.WriteHeader(404)
+		w.WriteHeader(401)
 	}
 }
 
 func (s *Server) EditArticle(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	slug := vars["slug"]
-	id, article := s.store.getArticle(slug)
-	if id == 0 {
-		w.WriteHeader(404)
-	} else {
-		edit := getArticleFromForm(r)
-		edit.Published = article.Published
-		edit.Edited = myTimeToString(time.Now().UTC())
+	if s.isAuth(r) {
+		vars := mux.Vars(r)
+		slug := vars["slug"]
+		id, article := s.store.getArticle(slug)
+		if id == 0 {
+			w.WriteHeader(404)
+		} else {
+			edit := getArticleFromForm(r)
+			edit.Published = article.Published
+			edit.Edited = myTimeToString(time.Now().UTC())
 
-		errors := s.ValidateArticle(edit, false)
-		if len(errors) != 0 {
-			w.WriteHeader(http.StatusBadRequest)
-			executeArticleForm(w, edit, template.HTMLAttr("value=\""+edit.Slug+"\""), "/"+article.Slug+"/edit", errors)
-			return
+			errors := s.ValidateArticle(edit, false)
+			if len(errors) != 0 {
+				w.WriteHeader(http.StatusBadRequest)
+				executeArticleForm(w, edit, template.HTMLAttr("value=\""+edit.Slug+"\""), "/"+article.Slug+"/edit", s.isAuth(r), errors)
+				return
+			}
+			s.store.editArticle(id, edit)
+			http.Redirect(w, r, "/"+edit.Slug, http.StatusSeeOther)
 		}
-		s.store.editArticle(id, edit)
-		http.Redirect(w, r, "/"+edit.Slug, http.StatusSeeOther)
+	} else {
+		w.WriteHeader(401)
 	}
 }
 
 func (s *Server) DeleteArticle(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	slug := vars["slug"]
-	id, _ := s.store.getArticle(slug)
-	if id > 0 {
-		s.store.deleteArticle(id)
-		w.WriteHeader(200) // 200 because I will render a page afterwards.
+	if s.isAuth(r) {
+		vars := mux.Vars(r)
+		slug := vars["slug"]
+		id, _ := s.store.getArticle(slug)
+		if id > 0 {
+			s.store.deleteArticle(id)
+			w.WriteHeader(200) // 200 because I will render a page afterwards.
+		} else {
+			w.WriteHeader(404)
+		}
+		http.Redirect(w, r, "/all", http.StatusSeeOther)
 	} else {
-		w.WriteHeader(404)
-	}
-	http.Redirect(w, r, "/all", http.StatusSeeOther)
-}
-
-func indexPage(w http.ResponseWriter, a []Article, cat string, curPage, maxPage int) {
-	type ArticleWithIsEdited struct {
-		Article
-		IsEdited bool
-	}
-
-	articlesWithIsEdited := []ArticleWithIsEdited{}
-	for _, v := range a {
-		isEdited := myStringToTime(v.Published).Before(myStringToTime(v.Edited))
-		newA := articleWithoutTime(v)
-		articlesWithIsEdited = append(articlesWithIsEdited, ArticleWithIsEdited{newA, isEdited})
-	}
-
-	tmpl := indexTemplate
-	tmpl.Execute(w, struct {
-		Articles []ArticleWithIsEdited
-		Category string
-		PageInfo PageInfo
-	}{articlesWithIsEdited, cat, makePageInfoObject(curPage, maxPage)})
-}
-
-func articleView(w http.ResponseWriter, a Article) {
-	if DEV {
-		viewTemplate = setViewTemplate()
-	}
-	tmpl := viewTemplate
-	tmpl, _ = tmpl.Parse("{{define \"body\"}}" + a.Body + "{{end}}")
-
-	isEdited := myStringToTime(a.Published).Before(myStringToTime(a.Edited))
-
-	tmpl.Execute(w, struct {
-		Article  Article
-		IsEdited bool
-	}{articleWithoutTime(a), isEdited})
-}
-
-func executeArticleForm(w http.ResponseWriter, a Article, slugValueAttr template.HTMLAttr, formAction string, errors ...[]string) {
-	if DEV {
-		formTemplate = setFormTemplate()
-	}
-	tmpl := formTemplate
-	if errors != nil {
-		tmpl.Execute(w, struct {
-			Article       Article
-			SlugValueAttr template.HTMLAttr
-			FormAction    string
-			Errors        []string
-		}{a, slugValueAttr, formAction, errors[0]})
-	} else {
-		tmpl.Execute(w, struct {
-			Article       Article
-			SlugValueAttr template.HTMLAttr
-			FormAction    string
-		}{a, slugValueAttr, formAction})
+		w.WriteHeader(401)
 	}
 }
 
-func getArticleFromForm(r *http.Request) Article {
+func (s *Server) LoginPage(w http.ResponseWriter, r *http.Request) {
+	if s.isAuth(r) {
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	}
+	loginForm(w, nil, s.isAuth(r))
+}
+
+func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
+	session, _ := s.sessionStore.Get(r, "user")
+
 	err := r.ParseForm()
 	checkErr(err)
 
-	a := Article{Title: r.FormValue("title")}
-	a.Preview = r.FormValue("preview")
-	a.Body = r.FormValue("body")
-	a.Slug = r.FormValue("slug")
-	a.Category = r.Form["category"][0]
-	return a
+	username := r.FormValue("username")
+	password := r.FormValue("password")
+	if errors := validateUserLogin(username, password); len(errors) != 0 {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		loginForm(w, errors, s.isAuth(r))
+		return
+	}
+	user, err := s.store.getUser(username, password)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		loginForm(w, []string{loginFailed}, s.isAuth(r))
+		return
+	}
+	if !user.checkPassword(password) {
+		w.WriteHeader(http.StatusUnauthorized)
+		loginForm(w, []string{loginFailed}, s.isAuth(r))
+		return
+	}
+
+	// Don't know what to put here.
+	newSesh := Sesh{name: user.Username, Authenticated: true}
+	s.sessionStore.Set(session, newSesh)
+
+	err = s.sessionStore.SaveSession(r, w, session)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+
+func (s *Server) AdminLogout(w http.ResponseWriter, r *http.Request) {
+	session, _ := s.sessionStore.Get(r, "user")
+
+	s.sessionStore.Set(session, Sesh{})
+	s.sessionStore.SetOption(session, "MaxAge", -1)
+
+	err := s.sessionStore.SaveSession(r, w, session)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) AdminPanel(w http.ResponseWriter, r *http.Request) {
+	if s.isAuth(r) {
+		adminPanel(w, true)
+		return
+	}
+	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 }

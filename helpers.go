@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -23,6 +24,12 @@ const (
 	errSlugAlreadyExists = "Slug is already being used by another article"
 	errSlugBad           = "Slug contains illegal characters"
 	errCatInvalid        = "Category is invalid"
+)
+
+const (
+	loginNoUsername = "Please enter a username."
+	loginNoPassword = "Please enter a password."
+	loginFailed     = "Incorrect username and/or password. Try again."
 )
 
 type Article struct {
@@ -40,6 +47,38 @@ type PageInfo struct {
 	MaxPage     int
 	Next        int
 	Prev        int
+}
+
+type User struct {
+	Id            int
+	Username      string
+	Email         string
+	Password_Hash string
+}
+
+type Sesh struct {
+	name          string
+	Authenticated bool
+}
+
+func (u *User) checkPassword(password string) bool {
+	// hash password then check if == to Password_Hash
+	err := bcrypt.CompareHashAndPassword([]byte(u.Password_Hash), []byte(password))
+	return err == nil
+}
+
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
+}
+
+func (s *Server) isAuth(r *http.Request) bool {
+	session, err := s.sessionStore.Get(r, "user")
+	if err != nil {
+		return false
+	}
+	sesh := s.sessionStore.getSesh(session)
+	return sesh.Authenticated
 }
 
 func MakeBothTypesOfArticle(n int) []Article {
@@ -196,6 +235,17 @@ slugCheck:
 	return
 }
 
+func validateUserLogin(username, password string) []string {
+	ret := []string{}
+	if username == "" {
+		ret = append(ret, loginNoUsername)
+	}
+	if password == "" {
+		ret = append(ret, loginNoPassword)
+	}
+	return ret
+}
+
 func getPageNumber(r *http.Request) int {
 	vars := mux.Vars(r)
 	page, ok := vars["page"]
@@ -223,4 +273,106 @@ func setViewTemplate() *template.Template {
 
 func setFormTemplate() *template.Template {
 	return template.Must(template.ParseFiles("static/templates/articleForm.html"))
+}
+
+func setLoginTemplate() *template.Template {
+	return template.Must(template.ParseFiles("static/templates/login.html"))
+}
+
+func setAdminPanelTemplate() *template.Template {
+	return template.Must(template.ParseFiles("static/templates/base.html", "static/templates/nav.html", "static/templates/adminPanel.html"))
+}
+
+func getArticleFromForm(r *http.Request) Article {
+	err := r.ParseForm()
+	checkErr(err)
+
+	a := Article{Title: r.FormValue("title")}
+	a.Preview = r.FormValue("preview")
+	a.Body = r.FormValue("body")
+	a.Slug = r.FormValue("slug")
+	a.Category = r.Form["category"][0]
+	return a
+}
+
+func indexPage(w http.ResponseWriter, a []Article, cat string, curPage, maxPage int, loggedIn bool) {
+	type ArticleWithIsEdited struct {
+		Article
+		IsEdited bool
+	}
+
+	articlesWithIsEdited := []ArticleWithIsEdited{}
+	for _, v := range a {
+		isEdited := myStringToTime(v.Published).Before(myStringToTime(v.Edited))
+		newA := articleWithoutTime(v)
+		articlesWithIsEdited = append(articlesWithIsEdited, ArticleWithIsEdited{newA, isEdited})
+	}
+
+	tmpl := indexTemplate
+	tmpl.Execute(w, struct {
+		Articles []ArticleWithIsEdited
+		Category string
+		PageInfo PageInfo
+		LoggedIn bool
+	}{articlesWithIsEdited, cat, makePageInfoObject(curPage, maxPage), loggedIn})
+}
+
+func articleView(w http.ResponseWriter, a Article, loggedIn bool) {
+	if DEV {
+		viewTemplate = setViewTemplate()
+	}
+	tmpl := viewTemplate
+	tmpl, _ = tmpl.Parse("{{define \"body\"}}" + a.Body + "{{end}}")
+
+	isEdited := myStringToTime(a.Published).Before(myStringToTime(a.Edited))
+
+	tmpl.Execute(w, struct {
+		Article  Article
+		IsEdited bool
+		LoggedIn bool
+	}{articleWithoutTime(a), isEdited, loggedIn})
+}
+
+func executeArticleForm(w http.ResponseWriter, a Article, slugValueAttr template.HTMLAttr, formAction string, loggedIn bool, errors ...[]string) {
+	if DEV {
+		formTemplate = setFormTemplate()
+	}
+	tmpl := formTemplate
+	if errors != nil {
+		tmpl.Execute(w, struct {
+			Article       Article
+			SlugValueAttr template.HTMLAttr
+			FormAction    string
+			Errors        []string
+			LoggedIn      bool
+		}{a, slugValueAttr, formAction, errors[0], loggedIn})
+	} else {
+		tmpl.Execute(w, struct {
+			Article       Article
+			SlugValueAttr template.HTMLAttr
+			FormAction    string
+			LoggedIn      bool
+		}{a, slugValueAttr, formAction, loggedIn})
+	}
+}
+
+func loginForm(w http.ResponseWriter, errors []string, loggedIn bool) {
+	if DEV {
+		loginTemplate = setLoginTemplate()
+	}
+	tmpl := loginTemplate
+	tmpl.Execute(w, struct {
+		Errors   []string
+		LoggedIn bool
+	}{errors, loggedIn})
+}
+
+func adminPanel(w http.ResponseWriter, loggedIn bool) {
+	if DEV {
+		adminPanelTemplate = setAdminPanelTemplate()
+	}
+	tmpl := adminPanelTemplate
+	tmpl.Execute(w, struct {
+		LoggedIn bool
+	}{loggedIn})
 }

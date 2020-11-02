@@ -7,6 +7,13 @@
     <link rel="stylesheet" href="/static/css/bulma.min.css" type="text/css" />
   </head>
   <body class="has-background-white-bis">
+  {{if .LoggedIn}}
+    Logged In
+    <a href="/admin">Admin Panel</a>
+    <form action="/admin/logout" method="post">
+      <input type="submit" value="Log Out">
+    </form>
+  {{end}}
   {{template "nav"}}
   <div style="background-image:url('/static/temp-pattern-small.jpg'); height: 50px; background-position: center; background-repeat: repeat;">
   </div>

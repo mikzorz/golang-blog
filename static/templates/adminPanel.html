@@ -3,5 +3,30 @@ Admin Panel
 {{end}}
 
 {{define "main"}}
-<p>Admin Panel</p>
+<p class="title">Admin Panel</p>
+<a href="/new">New Article +</a>
+<br>
+<br>
+<select id="article-select" class="" name="article-select" onchange="setLinks();">
+  <option value="">Select an article</option>
+  {{range .Articles}}
+  <option value="{{.Slug}}">{{.Title}}</option>
+  {{end}}
+</select>
+<a id="view-link" href="#">View</a>
+<a id="edit-link" href="#">Edit</a>
+<a id="delete-link" href="#" onclick="alert('Are you sure?')">Delete</a>
+
+<script type="text/javascript">
+  function setLinks() {
+    var viewlink = document.getElementById('view-link');
+    viewlink.href = document.getElementById('article-select').value;
+
+    var editlink = document.getElementById('edit-link');
+    editlink.href = document.getElementById('article-select').value + "/edit";
+
+    var deletelink = document.getElementById('delete-link');
+    deletelink.href = document.getElementById('article-select').value + "/delete";
+  }
+</script>
 {{end}}

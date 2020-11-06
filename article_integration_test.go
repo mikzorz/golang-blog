@@ -438,7 +438,7 @@ func TestWebIntegration(t *testing.T) {
 
 		t.Run("401 on DELETE /{slug}/delete if not logged in", func(t *testing.T) {
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodDelete, "/"+toDelete.Slug, nil)
+			req := newDeleteRequest(t, toDelete.Slug)
 			server.ServeHTTP(resp, req)
 
 			assertStatus(t, resp.Code, 401)
@@ -448,7 +448,7 @@ func TestWebIntegration(t *testing.T) {
 
 		t.Run("fail to delete non-existing article, receive code 404", func(t *testing.T) {
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodDelete, "/does-not-exist", nil)
+			req := newDeleteRequest(t, "does-not-exist")
 			server.ServeHTTP(resp, req)
 
 			assertStatus(t, resp.Code, 404)
@@ -458,13 +458,13 @@ func TestWebIntegration(t *testing.T) {
 			}
 		})
 
-		t.Run("successfully delete existing article, receive code 200", func(t *testing.T) {
+		t.Run("successfully delete existing article, receive code 303", func(t *testing.T) {
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodDelete, "/"+toDelete.Slug, nil)
+			req := newDeleteRequest(t, toDelete.Slug)
 
 			server.ServeHTTP(resp, req)
 
-			assertStatus(t, resp.Code, 200)
+			assertStatus(t, resp.Code, 303)
 
 			if len(store.getAll()) != len(articles)-1 {
 				t.Error("article not deleted")

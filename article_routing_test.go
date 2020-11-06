@@ -304,20 +304,20 @@ func TestArticleRouting(t *testing.T) {
 		sessStore := StubSessionStore{Sesh{Authenticated: true}}
 		server := NewServer(&store, &sessStore)
 
-		t.Run("200 for existing article", func(t *testing.T) {
+		t.Run("303 after deleting existing article", func(t *testing.T) {
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodDelete, "/some-article", nil)
+			req := newDeleteRequest(t, "some-article")
 
 			server.ServeHTTP(resp, req)
 
-			assertStatus(t, resp.Code, 200)
+			assertStatus(t, resp.Code, 303)
 			assertCalls(t, store.calls, []string{"getArticle", "delete"})
 			store.calls = []string{}
 		})
 
 		t.Run("404 for existing article", func(t *testing.T) {
 			resp := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodDelete, "/does-not-exist", nil)
+			req := newDeleteRequest(t, "does-not-exist")
 
 			server.ServeHTTP(resp, req)
 

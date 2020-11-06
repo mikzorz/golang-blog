@@ -283,11 +283,11 @@ func setViewTemplate() *template.Template {
 }
 
 func setFormTemplate() *template.Template {
-	return template.Must(template.ParseFiles("static/templates/articleForm.html"))
+	return template.Must(template.ParseFiles("static/templates/base.html", "static/templates/nav.html", "static/templates/articleForm.html"))
 }
 
 func setLoginTemplate() *template.Template {
-	return template.Must(template.ParseFiles("static/templates/login.html"))
+	return template.Must(template.ParseFiles("static/templates/base.html", "static/templates/nav.html", "static/templates/login.html"))
 }
 
 func setAdminPanelTemplate() *template.Template {
@@ -379,12 +379,13 @@ func loginForm(w http.ResponseWriter, errors []string, loggedIn bool) {
 	}{errors, loggedIn})
 }
 
-func adminPanel(w http.ResponseWriter, loggedIn bool) {
+func adminPanel(w http.ResponseWriter, articles []Article, loggedIn bool) {
 	if DEV {
 		adminPanelTemplate = setAdminPanelTemplate()
 	}
 	tmpl := adminPanelTemplate
 	tmpl.Execute(w, struct {
+		Articles []Article
 		LoggedIn bool
-	}{loggedIn})
+	}{articles, loggedIn})
 }

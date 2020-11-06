@@ -7,7 +7,7 @@ import (
 	"strconv"
 )
 
-const DEV = false
+const DEV = true
 const port = 3000
 
 var base = os.Getenv("GOPATH") + "/src/github.com/mikzorz/blog"

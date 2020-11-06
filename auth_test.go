@@ -21,7 +21,7 @@ func TestAuth(t *testing.T) {
 		server.ServeHTTP(resp, req)
 
 		assertStatus(t, resp.Code, 200)
-		assertContains(t, resp.Body.String(), "<h1>Login</h1>")
+		assertContains(t, resp.Body.String(), "<h1 class=\"title\">Login</h1>")
 		assertContains(t, resp.Body.String(), "</form>")
 	})
 

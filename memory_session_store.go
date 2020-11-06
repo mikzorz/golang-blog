@@ -24,6 +24,7 @@ func NewMemorySessionStore() *MemorySessionStore {
 	m.cs.Options = &sessions.Options{
 		MaxAge:   22800,
 		HttpOnly: true,
+		Path:     "/",
 	}
 	return m
 }

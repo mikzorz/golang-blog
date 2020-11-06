@@ -94,8 +94,15 @@ func newGetRequest(t *testing.T, path string) *http.Request {
 }
 
 func newPostRequest(t *testing.T, path string, data url.Values) *http.Request {
+	t.Helper()
 	req, _ := http.NewRequest(http.MethodPost, path, strings.NewReader(data.Encode()))
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	return req
+}
+
+func newDeleteRequest(t *testing.T, slug string) *http.Request {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodGet, "/"+slug+"/delete", nil)
 	return req
 }
 

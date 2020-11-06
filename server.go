@@ -68,7 +68,7 @@ func NewServer(store Store, sessStore SessionStore) *Server {
 	r.HandleFunc("/admin/logout", s.AdminLogout).Methods("POST")
 
 	r.HandleFunc("/{slug}", s.ArticleView).Methods("GET")
-	r.HandleFunc("/{slug}", s.DeleteArticle).Methods("DELETE")
+	r.HandleFunc("/{slug}/delete", s.DeleteArticle).Methods("GET") // Can't send delete from standard html anchor.
 	r.HandleFunc("/{slug}/edit", s.EditArticleForm).Methods("GET")
 	r.HandleFunc("/{slug}/edit", s.EditArticle).Methods("POST")
 
@@ -131,6 +131,7 @@ func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {
 func (s *Server) NewArticleForm(w http.ResponseWriter, r *http.Request) {
 	if s.isAuth(r) {
 		executeArticleForm(w, Article{}, template.HTMLAttr(""), "/new", s.isAuth(r))
+		return
 	} else {
 		w.WriteHeader(401)
 	}
@@ -166,6 +167,7 @@ func (s *Server) EditArticleForm(w http.ResponseWriter, r *http.Request) {
 		} else {
 			w.WriteHeader(404)
 		}
+		return
 	} else {
 		w.WriteHeader(401)
 	}
@@ -204,11 +206,11 @@ func (s *Server) DeleteArticle(w http.ResponseWriter, r *http.Request) {
 		id, _ := s.store.getArticle(slug)
 		if id > 0 {
 			s.store.deleteArticle(id)
-			w.WriteHeader(200) // 200 because I will render a page afterwards.
 		} else {
 			w.WriteHeader(404)
+			return
 		}
-		http.Redirect(w, r, "/all", http.StatusSeeOther)
+		http.Redirect(w, r, "/admin", http.StatusSeeOther)
 	} else {
 		w.WriteHeader(401)
 	}
@@ -274,7 +276,7 @@ func (s *Server) AdminLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) AdminPanel(w http.ResponseWriter, r *http.Request) {
 	if s.isAuth(r) {
-		adminPanel(w, true)
+		adminPanel(w, articlesWithoutTimes(s.store.getAll()), true)
 		return
 	}
 	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)

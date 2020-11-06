@@ -15,6 +15,18 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var indexTemplate *template.Template
+var viewTemplate *template.Template
+var formTemplate *template.Template
+var loginTemplate *template.Template
+var adminPanelTemplate *template.Template
+
+const perPage = 10
+
+const maxTitleLength = 50
+const progCat = "Programming"
+const otherCat = "Other"
+
 const (
 	errTitleLong         = "Title is too long"
 	errTitleEmpty        = "Title cannot be empty"
@@ -90,7 +102,7 @@ func MakeBothTypesOfArticle(n int) []Article {
 	return articles
 }
 
-// Only used in tests. Should probably move to test file.
+// Only used in tests. Could be moved to test file.
 func MakeArticlesOfCategory(amount int, now time.Time, category string) []Article {
 	ret := []Article{}
 	for i := 0; i < amount; i++ {
@@ -195,7 +207,6 @@ func reverseArticles(in []Article) []Article {
 func (s *Server) ValidateArticle(a Article, checkSlugExists bool) (errors []string) {
 	// Check each field.
 	// If Title is too long or doesn't exist.
-	maxTitleLength := 50 // Not finalized, test in browser to see when titles look bad.
 	if len([]rune(a.Title)) > maxTitleLength {
 		errors = append(errors, errTitleLong)
 	}
@@ -321,6 +332,7 @@ func articleView(w http.ResponseWriter, a Article, loggedIn bool) {
 	if DEV {
 		viewTemplate = setViewTemplate()
 	}
+	// This could be done differently.
 	tmpl := viewTemplate
 	tmpl, _ = tmpl.Parse("{{define \"body\"}}" + a.Body + "{{end}}")
 

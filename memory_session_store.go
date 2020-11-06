@@ -8,8 +8,7 @@ import (
 )
 
 type MemorySessionStore struct {
-	cs      *sessions.CookieStore
-	Options *sessions.Options
+	cs *sessions.CookieStore
 }
 
 func NewMemorySessionStore() *MemorySessionStore {
@@ -22,8 +21,8 @@ func NewMemorySessionStore() *MemorySessionStore {
 		encryptionKeyOne,
 	)
 
-	m.Options = &sessions.Options{
-		MaxAge:   720,
+	m.cs.Options = &sessions.Options{
+		MaxAge:   22800,
 		HttpOnly: true,
 	}
 	return m
@@ -60,12 +59,3 @@ func (m *MemorySessionStore) SetOption(s *sessions.Session, o string, v interfac
 		s.Options.MaxAge = v.(int)
 	}
 }
-
-// func (m *MemorySessionStore) isLoggedIn(w http.ResponseWriter, r *http.Request) bool {
-// 	session, err := m.Get(r, "user")
-// 	if err != nil {
-// 		return false
-// 	}
-// 	sesh := m.getSesh(session)
-// 	return sesh.Authenticated
-// }

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestArticle(t *testing.T) {
+func TestArticleRouting(t *testing.T) {
 	t.Run("get all, routing", func(t *testing.T) {
 		store := StubStore{calls: []string{}}
 		sessStore := StubSessionStore{}
@@ -61,7 +61,7 @@ func TestArticle(t *testing.T) {
 		assertCalls(t, store.calls, want)
 	})
 
-	t.Run("get view page of single article, routing", func(t *testing.T) {
+	t.Run("get view page of single article", func(t *testing.T) {
 		articles := MakeArticlesOfCategory(10, time.Now().UTC(), progCat)
 
 		store := StubStore{articles: articles, calls: []string{}}

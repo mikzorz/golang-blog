@@ -14,8 +14,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Move things like reused article structs up here. NOT DONE
-
 var validArticleBase = Article{
 	Title:    "I am a valid article!",
 	Preview:  "<p>This is a valid preview.</p>",
@@ -52,7 +50,6 @@ func (s *StubStore) getAll() []Article {
 func (s *StubStore) getPage(page int, category string) ([]Article, int, int) {
 	s.calls = append(s.calls, "getPage")
 
-	// Should paginate, but currently don't need to. Pagination is not tested for StubStore.
 	return s.articles, 0, 0
 }
 
@@ -166,7 +163,6 @@ func assertNotArticle(t *testing.T, got, notwant Article) {
 func assertArticles(t *testing.T, got, want []Article) {
 	t.Helper()
 	if !reflect.DeepEqual(got, want) {
-		// Very ugly logs.
 		t.Errorf("article slice doesn't match, got %v, want %v", got, want)
 	}
 }
@@ -188,7 +184,6 @@ func assertCalls(t *testing.T, got, want []string) {
 func assertContains(t *testing.T, got, want string) {
 	t.Helper()
 	if !strings.Contains(got, want) {
-		// t.Errorf("%s does not contain %s", got, want)
 		t.Errorf("got %s, want %s", got, want)
 	}
 }
@@ -196,7 +191,6 @@ func assertContains(t *testing.T, got, want string) {
 func assertNotContain(t *testing.T, got, notWant string) {
 	t.Helper()
 	if strings.Contains(got, notWant) {
-		// t.Errorf("%s does not contain %s", got, want)
 		t.Errorf("got %s, don't want %s", got, notWant)
 	}
 }

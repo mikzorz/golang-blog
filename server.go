@@ -44,6 +44,12 @@ func NewServer(store Store, sessStore SessionStore) *Server {
 	s.sessionStore = sessStore
 	gob.Register(Sesh{})
 
+	indexTemplate = setIndexTemplate()
+	viewTemplate = setViewTemplate()
+	formTemplate = setFormTemplate()
+	loginTemplate = setLoginTemplate()
+	adminPanelTemplate = setAdminPanelTemplate()
+
 	r := mux.NewRouter()
 	// r.PathPrefix("/static/css/").Handler(http.StripPrefix("/static/css/", http.FileServer(http.Dir(path.Join(base, "/static/css")))))
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(path.Join(base, "/static")))))
@@ -240,7 +246,6 @@ func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Don't know what to put here.
 	newSesh := Sesh{name: user.Username, Authenticated: true}
 	s.sessionStore.Set(session, newSesh)
 

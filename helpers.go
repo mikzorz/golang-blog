@@ -5,8 +5,10 @@ import (
 	"html/template"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -84,6 +86,23 @@ func HashPassword(password string) (string, error) {
 	return string(bytes), err
 }
 
+var emailRegex = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+
+func isEmailValid(e string) bool {
+	if len(e) < 3 && len(e) > 254 {
+		return false
+	}
+	if !emailRegex.MatchString(e) {
+		return false
+	}
+	parts := strings.Split(e, "@")
+	mx, err := net.LookupMX(parts[1])
+	if err != nil || len(mx) == 0 {
+		return false
+	}
+	return true
+}
+
 func (s *Server) isAuth(r *http.Request) bool {
 	session, err := s.sessionStore.Get(r, "user")
 	if err != nil {
@@ -91,6 +110,14 @@ func (s *Server) isAuth(r *http.Request) bool {
 	}
 	sesh := s.sessionStore.getSesh(session)
 	return sesh.Authenticated
+}
+
+func getIP(r *http.Request) string {
+	forwarded := r.Header.Get("X-FORWARDED-FOR")
+	if forwarded != "" {
+		return forwarded
+	}
+	return r.RemoteAddr
 }
 
 func MakeBothTypesOfArticle(n int) []Article {
@@ -319,22 +346,27 @@ func indexPage(w http.ResponseWriter, a []Article, cat string, curPage, maxPage 
 		articlesWithIsEdited = append(articlesWithIsEdited, ArticleWithIsEdited{newA, isEdited})
 	}
 
+	// Reload HTML without rebuilding project.
+	if DEV {
+		indexTemplate = setIndexTemplate()
+	}
+
 	tmpl := indexTemplate
 	tmpl.Execute(w, struct {
 		Articles []ArticleWithIsEdited
 		Category string
 		PageInfo PageInfo
 		LoggedIn bool
-	}{articlesWithIsEdited, cat, makePageInfoObject(curPage, maxPage), loggedIn})
+		Dev      bool
+	}{articlesWithIsEdited, cat, makePageInfoObject(curPage, maxPage), loggedIn, DEV})
 }
 
 func articleView(w http.ResponseWriter, a Article, loggedIn bool) {
-	if DEV {
-		viewTemplate = setViewTemplate()
-	}
-	// This could be done differently.
+	viewTemplate = setViewTemplate()
+
 	tmpl := viewTemplate
-	tmpl, _ = tmpl.Parse("{{define \"body\"}}" + a.Body + "{{end}}")
+	// This could be done differently. This may also be what was breaking the 'if DEV' statement.
+	tmpl = template.Must(tmpl.Parse("{{define \"body\"}}" + a.Body + "{{end}}"))
 
 	isEdited := myStringToTime(a.Published).Before(myStringToTime(a.Edited))
 
@@ -342,7 +374,8 @@ func articleView(w http.ResponseWriter, a Article, loggedIn bool) {
 		Article  Article
 		IsEdited bool
 		LoggedIn bool
-	}{articleWithoutTime(a), isEdited, loggedIn})
+		Dev      bool
+	}{articleWithoutTime(a), isEdited, loggedIn, DEV})
 }
 
 func executeArticleForm(w http.ResponseWriter, a Article, slugValueAttr template.HTMLAttr, formAction string, loggedIn bool, errors ...[]string) {
@@ -357,14 +390,17 @@ func executeArticleForm(w http.ResponseWriter, a Article, slugValueAttr template
 			FormAction    string
 			Errors        []string
 			LoggedIn      bool
-		}{a, slugValueAttr, formAction, errors[0], loggedIn})
+			Dev           bool
+		}{a, slugValueAttr, formAction, errors[0], loggedIn, DEV})
 	} else {
 		tmpl.Execute(w, struct {
 			Article       Article
 			SlugValueAttr template.HTMLAttr
 			FormAction    string
+			Errors        []string
+			Dev           bool
 			LoggedIn      bool
-		}{a, slugValueAttr, formAction, loggedIn})
+		}{a, slugValueAttr, formAction, []string{}, loggedIn, DEV})
 	}
 }
 
@@ -376,7 +412,8 @@ func loginForm(w http.ResponseWriter, errors []string, loggedIn bool) {
 	tmpl.Execute(w, struct {
 		Errors   []string
 		LoggedIn bool
-	}{errors, loggedIn})
+		Dev      bool
+	}{errors, loggedIn, DEV})
 }
 
 func adminPanel(w http.ResponseWriter, articles []Article, loggedIn bool) {
@@ -387,5 +424,6 @@ func adminPanel(w http.ResponseWriter, articles []Article, loggedIn bool) {
 	tmpl.Execute(w, struct {
 		Articles []Article
 		LoggedIn bool
-	}{articles, loggedIn})
+		Dev      bool
+	}{articles, loggedIn, DEV})
 }

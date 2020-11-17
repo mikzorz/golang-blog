@@ -332,6 +332,7 @@ func TestWebIntegration(t *testing.T) {
 				assertContains(t, resp.Body.String(), template.HTMLEscapeString(a.Body)+"</textarea>")
 				assertContains(t, resp.Body.String(), "<input type=\"text\" name=\"slug\" value=\""+a.Slug+"\">")
 				// assertContains(t, resp.Body.String(), "<input type=\"text\" name=\"category\" value=\""+a.Category+"\">")
+				assertContains(t, resp.Body.String(), "<footer")
 			})
 			t.Run("article does not exist", func(t *testing.T) {
 				resp := httptest.NewRecorder()

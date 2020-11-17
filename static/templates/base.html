@@ -5,37 +5,47 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{template "title" .}}</title>
     <link rel="stylesheet" href="/static/css/bulma.min.css" type="text/css" />
+    <link rel="stylesheet" href="/static/css/custom.css" type="text/css" />
   </head>
-  <body class="has-background-white-bis">
-  {{if .LoggedIn}}
-    Logged In
-    <a href="/admin">Admin Panel</a>
-    <form action="/admin/logout" method="post">
-      <input type="submit" value="Log Out">
-    </form>
-  {{end}}
-  {{template "nav"}}
-  <div style="background-image:url('/static/temp-pattern-small.jpg'); height: 50px; background-position: center; background-repeat: repeat;">
-  </div>
-  <section class="section">
-    <div class="container">
-      {{template "main" .}}
-    </div>
-  </section>
-  <footer class="footer has-background-black-ter has-text-grey">
-    <div class="content columns has-text-centered">
-    {{/* <div class="column">
-        <p>RSS:</p>
-        <p>All Articles</p>
-        <p>Programming</p>
-        <p>Other Articles</p>
-      </div> */}}
-      <div class="column">
-        <p>
-          Made with <a class="has-text-info">Golang</a> and <a class="has-text-primary">Bulma</a>
-        </p>
+  <body>
+    <div id="wrapper" class="has-background-white-bis">
+      {{if .LoggedIn}}
+        <div class="field is-grouped admin-bar">
+          <a class="button control is-info" href="/admin">Admin Panel</a>
+          <form action="/admin/logout" method="post">
+            <input class="button control is-link" type="submit" value="Log Out">
+          </form>
+        </div>
+      {{else}}
+        {{if .Dev}}
+        <div class="admin-bar">
+          <a href="/admin/login" class="button is-danger">Login</a>
+        </div>
+        {{end}}
+      {{end}}
+      {{template "nav"}}
+      <div id="banner">
       </div>
+      <section class="section">
+        <div class="container">
+          {{template "main" .}}
+        </div>
+      </section>
     </div>
-  </footer>
+    <footer class="footer has-background-black-ter has-text-grey">
+      <div class="content columns has-text-centered">
+      {{/* <div class="column">
+          <p>RSS:</p>
+          <p>All Articles</p>
+          <p>Programming</p>
+          <p>Other Articles</p>
+        </div> */}}
+        <div class="column">
+          <p>
+            Made with <a class="has-text-info" href="https://golang.org/">Golang</a> and <a class="has-text-primary" href="https://bulma.io/">Bulma</a>
+          </p>
+        </div>
+      </div>
+    </footer>
   </body>
 </html>

@@ -51,8 +51,8 @@ func NewServer(store Store, sessStore SessionStore) *Server {
 	adminPanelTemplate = setAdminPanelTemplate()
 
 	r := mux.NewRouter()
-	// r.PathPrefix("/static/css/").Handler(http.StripPrefix("/static/css/", http.FileServer(http.Dir(path.Join(base, "/static/css")))))
-	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(path.Join(base, "/static")))))
+	r.PathPrefix("/static/css/").Handler(http.StripPrefix("/static/css/", http.FileServer(http.Dir(path.Join(base, "/static/css")))))
+	r.PathPrefix("/static/images/").Handler(http.StripPrefix("/static/images/", http.FileServer(http.Dir(path.Join(base, "/static/images")))))
 
 	r.HandleFunc("/", s.MainIndexPage).Methods("GET")
 	r.HandleFunc("/new", s.NewArticleForm).Methods("GET")
@@ -80,20 +80,12 @@ func NewServer(store Store, sessStore SessionStore) *Server {
 func (s *Server) MainIndexPage(w http.ResponseWriter, r *http.Request) {
 	articles, page, maxPage := s.store.getPage(getPageNumber(r), progCat)
 
-	// Reload HTML without rebuilding project.
-	if DEV {
-		indexTemplate = setIndexTemplate()
-	}
 	indexPage(w, articles, progCat, page, maxPage, s.isAuth(r))
 }
 
 func (s *Server) OtherIndexPage(w http.ResponseWriter, r *http.Request) {
 	articles, page, maxPage := s.store.getPage(getPageNumber(r), otherCat)
 
-	// Reload HTML without rebuilding project.
-	if DEV {
-		indexTemplate = setIndexTemplate()
-	}
 	indexPage(w, articles, otherCat, page, maxPage, s.isAuth(r))
 }
 
@@ -113,7 +105,8 @@ func (s *Server) All(w http.ResponseWriter, r *http.Request) {
 		Column2  []Article
 		Category string
 		LoggedIn bool
-	}{articles[:len(articles)/2], articles[len(articles)/2:], "", s.isAuth(r)})
+		Dev      bool
+	}{articles[:len(articles)/2], articles[len(articles)/2:], "", s.isAuth(r), DEV})
 }
 
 func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +142,6 @@ func (s *Server) NewArticle(w http.ResponseWriter, r *http.Request) {
 			executeArticleForm(w, a, template.HTMLAttr("value=\""+a.Slug+"\""), "/new", s.isAuth(r), errors)
 			return
 		}
-		// w.WriteHeader(200)
 		s.store.newArticle(a)
 		http.Redirect(w, r, "/all", http.StatusSeeOther)
 	} else {
@@ -232,21 +224,26 @@ func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 	if errors := validateUserLogin(username, password); len(errors) != 0 {
+		go sendEmailToAdmin(r, false)
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		loginForm(w, errors, s.isAuth(r))
 		return
 	}
 	user, err := s.store.getUser(username, password)
 	if err != nil {
+		go sendEmailToAdmin(r, false)
 		w.WriteHeader(http.StatusUnauthorized)
 		loginForm(w, []string{loginFailed}, s.isAuth(r))
 		return
 	}
 	if !user.checkPassword(password) {
+		go sendEmailToAdmin(r, false)
 		w.WriteHeader(http.StatusUnauthorized)
 		loginForm(w, []string{loginFailed}, s.isAuth(r))
 		return
 	}
+
+	go sendEmailToAdmin(r, true)
 
 	newSesh := Sesh{name: user.Username, Authenticated: true}
 	s.sessionStore.Set(session, newSesh)

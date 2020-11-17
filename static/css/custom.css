@@ -1,0 +1,27 @@
+html, body {
+  height:100%;
+}
+
+footer {
+  position:relative;
+  margin-top: -10.5em;
+}
+
+#wrapper {
+  min-height:100%;
+  position:relative;
+  padding-bottom: 18em;
+}
+
+#banner {
+  background-image:url('/static/images/temp-pattern-small.jpg');
+  height: 50px;
+  background-position: center;
+  background-repeat: repeat;
+}
+
+.admin-bar {
+  background-color: #444;
+  margin:0;
+  padding:5px;
+}

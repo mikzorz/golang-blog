@@ -50,8 +50,7 @@ func TestAuth(t *testing.T) {
 			server.ServeHTTP(resp, req)
 
 			assertStatus(t, resp.Code, 200)
-			assertContains(t, resp.Body.String(), "Logged In")
-			assertContains(t, resp.Body.String(), "<a href=\"/admin\">Admin Panel</a>")
+			assertContains(t, resp.Body.String(), "href=\"/admin\">Admin Panel</a>")
 			assertContains(t, resp.Body.String(), "<form action=\"/admin/logout\" method=\"post\">")
 		})
 

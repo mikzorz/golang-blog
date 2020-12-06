@@ -101,12 +101,13 @@ func (s *Server) All(w http.ResponseWriter, r *http.Request) {
 	}
 	tmpl := indexTemplate
 	tmpl.Execute(w, struct {
-		Column1  []Article
-		Column2  []Article
-		Category string
-		LoggedIn bool
-		Dev      bool
-	}{articles[:len(articles)/2], articles[len(articles)/2:], "", s.isAuth(r), DEV})
+		Column1     []Article
+		Column2     []Article
+		Category    string
+		LoggedIn    bool
+		Dev         bool
+		Description string
+	}{articles[:len(articles)/2], articles[len(articles)/2:], "", s.isAuth(r), DEV, defaultDescription})
 }
 
 func (s *Server) ArticleView(w http.ResponseWriter, r *http.Request) {

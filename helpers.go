@@ -17,6 +17,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const defaultDescription = "A code journal."
+
 var indexTemplate *template.Template
 var viewTemplate *template.Template
 var formTemplate *template.Template
@@ -136,6 +138,7 @@ func MakeArticlesOfCategory(amount int, now time.Time, category string) []Articl
 		nowOffset := myTimeToString(now.Add(time.Hour * -1).Add(time.Second * time.Duration(i)))
 		art := Article{
 			Title:     category + " Article " + strconv.Itoa(i),
+			Preview:   "This is the preview for " + category + " Article " + strconv.Itoa(i),
 			Body:      "Test Article " + strconv.Itoa(i),
 			Slug:      strings.ToLower(category) + "-article-" + strconv.Itoa(i),
 			Published: nowOffset,
@@ -192,9 +195,13 @@ func articlesWithoutTimes(articles []Article) []Article {
 
 func articleWithoutTime(a Article) Article {
 	ret := a
-	ret.Published = ret.Published[:10]
-	ret.Edited = ret.Edited[:10]
+	ret.Published = dateWithoutTime(ret.Published)
+	ret.Edited = dateWithoutTime(ret.Edited)
 	return ret
+}
+
+func dateWithoutTime(date string) string {
+	return date[:10]
 }
 
 func checkErr(err error) {
@@ -353,12 +360,13 @@ func indexPage(w http.ResponseWriter, a []Article, cat string, curPage, maxPage 
 
 	tmpl := indexTemplate
 	tmpl.Execute(w, struct {
-		Articles []ArticleWithIsEdited
-		Category string
-		PageInfo PageInfo
-		LoggedIn bool
-		Dev      bool
-	}{articlesWithIsEdited, cat, makePageInfoObject(curPage, maxPage), loggedIn, DEV})
+		Articles    []ArticleWithIsEdited
+		Category    string
+		PageInfo    PageInfo
+		LoggedIn    bool
+		Dev         bool
+		Description string
+	}{articlesWithIsEdited, cat, makePageInfoObject(curPage, maxPage), loggedIn, DEV, defaultDescription})
 }
 
 func articleView(w http.ResponseWriter, a Article, loggedIn bool) {
@@ -371,11 +379,12 @@ func articleView(w http.ResponseWriter, a Article, loggedIn bool) {
 	isEdited := myStringToTime(a.Published).Before(myStringToTime(a.Edited))
 
 	tmpl.Execute(w, struct {
-		Article  Article
-		IsEdited bool
-		LoggedIn bool
-		Dev      bool
-	}{articleWithoutTime(a), isEdited, loggedIn, DEV})
+		Article     Article
+		IsEdited    bool
+		LoggedIn    bool
+		Dev         bool
+		Description string
+	}{articleWithoutTime(a), isEdited, loggedIn, DEV, dateWithoutTime(a.Published) + " " + a.Preview})
 }
 
 func executeArticleForm(w http.ResponseWriter, a Article, slugValueAttr template.HTMLAttr, formAction string, loggedIn bool, errors ...[]string) {
@@ -391,7 +400,8 @@ func executeArticleForm(w http.ResponseWriter, a Article, slugValueAttr template
 			Errors        []string
 			LoggedIn      bool
 			Dev           bool
-		}{a, slugValueAttr, formAction, errors[0], loggedIn, DEV})
+			Description   string
+		}{a, slugValueAttr, formAction, errors[0], loggedIn, DEV, defaultDescription})
 	} else {
 		tmpl.Execute(w, struct {
 			Article       Article
@@ -400,7 +410,8 @@ func executeArticleForm(w http.ResponseWriter, a Article, slugValueAttr template
 			Errors        []string
 			Dev           bool
 			LoggedIn      bool
-		}{a, slugValueAttr, formAction, []string{}, loggedIn, DEV})
+			Description   string
+		}{a, slugValueAttr, formAction, []string{}, loggedIn, DEV, defaultDescription})
 	}
 }
 
@@ -410,10 +421,11 @@ func loginForm(w http.ResponseWriter, errors []string, loggedIn bool) {
 	}
 	tmpl := loginTemplate
 	tmpl.Execute(w, struct {
-		Errors   []string
-		LoggedIn bool
-		Dev      bool
-	}{errors, loggedIn, DEV})
+		Errors      []string
+		LoggedIn    bool
+		Dev         bool
+		Description string
+	}{errors, loggedIn, DEV, defaultDescription})
 }
 
 func adminPanel(w http.ResponseWriter, articles []Article, loggedIn bool) {
@@ -422,8 +434,9 @@ func adminPanel(w http.ResponseWriter, articles []Article, loggedIn bool) {
 	}
 	tmpl := adminPanelTemplate
 	tmpl.Execute(w, struct {
-		Articles []Article
-		LoggedIn bool
-		Dev      bool
-	}{articles, loggedIn, DEV})
+		Articles    []Article
+		LoggedIn    bool
+		Dev         bool
+		Description string
+	}{articles, loggedIn, DEV, defaultDescription})
 }

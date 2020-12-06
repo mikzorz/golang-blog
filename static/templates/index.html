@@ -1,9 +1,17 @@
-{{define "title"}}{{.Category}} Index{{end}}
+{{define "title"}}
+  {{if eq .Category ""}}
+    All Articles -
+  {{else}}
+    {{if gt .PageInfo.CurrentPage 1}}
+      Page {{.PageInfo.CurrentPage}} -
+    {{end}}
+  {{end}}
+{{end}}
 
 {{define "main"}}
       <div class="columns">
         <div class="column is-10 is-offset-1">
-          <h1 class="title">{{.Category}} Index</h1>
+          <h1 class="title">{{.Category}} Articles</h1>
           {{if ne .Category ""}}
           {{template "index-pagination" .}}
           {{ range .Articles }}

@@ -28,6 +28,7 @@ func TestWebIntegration(t *testing.T) {
 		server.ServeHTTP(resp, req)
 
 		assertStatus(t, resp.Code, 200)
+		assertContains(t, resp.Body.String(), defaultDescription)
 
 		for _, v := range articles {
 			assertContains(t, resp.Body.String(), v.Title)
@@ -85,6 +86,7 @@ func TestWebIntegration(t *testing.T) {
 
 		server.ServeHTTP(resp, req)
 
+		assertContains(t, resp.Body.String(), "content=\""+defaultDescription+"\"")
 		assertContains(t, resp.Body.String(), "Published: "+progWant[0].Published[:10])
 		assertContains(t, resp.Body.String(), "Last Edited: "+progWant[0].Edited[:10])
 		assertContains(t, resp.Body.String(), `<nav class="pagination" role="navigation" aria-label="pagination">`)
@@ -125,6 +127,8 @@ func TestWebIntegration(t *testing.T) {
 		server.ServeHTTP(resp, req)
 
 		assertStatus(t, resp.Code, 200)
+		assertNotContain(t, resp.Body.String(), "content=\""+defaultDescription+"\"")
+		assertContains(t, resp.Body.String(), dateWithoutTime(articles[0].Published)+" "+articles[0].Preview)
 		assertContains(t, resp.Body.String(), articles[0].Title)
 		assertContains(t, resp.Body.String(), articles[0].Body)
 
@@ -247,7 +251,7 @@ func TestWebIntegration(t *testing.T) {
 
 			server.ServeHTTP(resp, req)
 
-			assertContains(t, resp.Body.String(), "Index")
+			assertContains(t, resp.Body.String(), "Articles")
 			assertContains(t, resp.Body.String(), validArticle.Title)
 		})
 

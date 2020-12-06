@@ -14,10 +14,9 @@ footer {
 }
 
 #banner {
-  background-image:url('/static/images/temp-pattern-small.jpg');
-  height: 50px;
-  background-position: center;
-  background-repeat: repeat;
+  height: 4px;
+  /*background-image:url('/static/images/temp-pattern-small.jpg');*/
+  background-color: #7d4;
 }
 
 .admin-bar {

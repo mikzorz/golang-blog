@@ -77,10 +77,19 @@ type Sesh struct {
 	Authenticated bool
 }
 
+// Old, use if saving admin data to db.
+// func (u *User) checkPassword(password string) bool {
+// 	// hash password then check if == to Password_Hash
+// 	err := bcrypt.CompareHashAndPassword([]byte(u.Password_Hash), []byte(password))
+// 	return err == nil
+// }
+
+// Current, checks against password in env var.
 func (u *User) checkPassword(password string) bool {
-	// hash password then check if == to Password_Hash
-	err := bcrypt.CompareHashAndPassword([]byte(u.Password_Hash), []byte(password))
-	return err == nil
+	if password == "" {
+		return false
+	}
+	return password == admin_pass
 }
 
 func HashPassword(password string) (string, error) {

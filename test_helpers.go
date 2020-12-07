@@ -80,7 +80,7 @@ func (s *StubStore) doesSlugExist(slug string) bool {
 	return false
 }
 
-func (s *StubStore) getUser(username, password string) (User, error) {
+func (s *StubStore) getUser(username string) (User, error) {
 	return User{}, nil
 }
 

@@ -149,7 +149,7 @@ func (f *FileSystemStore) saveUsers(users []User) {
 	}
 }
 
-func (f *FileSystemStore) getUser(username, password string) (User, error) {
+func (f *FileSystemStore) getUser(username string) (User, error) {
 	rows, err := f.db.Query("SELECT * FROM Users WHERE Username = ? Limit 1", username)
 	checkErr(err)
 	defer rows.Close()

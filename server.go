@@ -20,7 +20,7 @@ type Store interface {
 	editArticle(int, Article)
 	deleteArticle(id int)
 	doesSlugExist(string) bool
-	getUser(username, password string) (User, error)
+	getUser(username string) (User, error)
 }
 
 type SessionStore interface {
@@ -230,13 +230,16 @@ func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
 		loginForm(w, errors, s.isAuth(r))
 		return
 	}
-	user, err := s.store.getUser(username, password)
-	if err != nil {
+	// Used db, now using env var.
+	// user, err := s.store.getUser(username)
+	// if err != nil {
+	if username != admin_username {
 		go sendEmailToAdmin(r, false)
 		w.WriteHeader(http.StatusUnauthorized)
 		loginForm(w, []string{loginFailed}, s.isAuth(r))
 		return
 	}
+	user := User{}
 	if !user.checkPassword(password) {
 		go sendEmailToAdmin(r, false)
 		w.WriteHeader(http.StatusUnauthorized)

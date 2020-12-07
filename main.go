@@ -16,10 +16,15 @@ const port = 3000
 
 var base = os.Getenv("blog_dir")
 
+// Default
 var dbName = "blog.db"
 var dbPath = base + "/" + dbName
 
 var sendEmailToAdmin func(*http.Request, bool) = func(*http.Request, bool) {}
+
+// Defaults for testing. Uses env vars for production.
+var admin_username = "admin"
+var admin_pass = "password"
 
 func main() {
 	if base == "" {
@@ -59,16 +64,34 @@ func main() {
 	} else {
 		log.Print("Running in PRODUCTION mode.")
 
+		customDbPath := os.Getenv("blog_db")
+		if customDbPath == "" {
+			log.Print("Environment variable not set: blog_db, will save db as $PWD/blog.db")
+		} else {
+			dbPath = customDbPath
+		}
+
 		dbFile, err = os.OpenFile(dbPath, os.O_RDWR|os.O_CREATE, 0600)
 		if err != nil {
 			log.Fatalf("problem opening %s %v", dbPath, err)
 		}
 		defer dbFile.Close()
 
-		username := os.Getenv("blog_username")
-		if username == "" {
+		admin_username = os.Getenv("blog_username")
+		if admin_username == "" {
 			log.Fatal("Environment variable not set: blog_username")
 		}
+
+		admin_pass = os.Getenv("blog_password")
+		if admin_pass == "" {
+			log.Fatal("Environment variable not set: blog_password")
+		}
+
+		// Not used at the moment.
+		// pass_hash, err := HashPassword(admin_pass)
+		// if err != nil {
+		// 	log.Fatal("Couldn't hash password")
+		// }
 
 		admin_email := os.Getenv("blog_email")
 		if admin_email == "" {
@@ -83,20 +106,11 @@ func main() {
 			log.Fatal("Environment variable not set: blog_bridgepass")
 		}
 
-		password := os.Getenv("blog_password")
-		if password == "" {
-			log.Fatal("Environment variable not set: blog_password")
-		}
-		pass_hash, err := HashPassword(password)
-		if err != nil {
-			log.Fatal("Couldn't hash password")
-		}
-
-		admin := User{
-			Username:      username,
-			Email:         admin_email,
-			Password_Hash: pass_hash,
-		}
+		// admin := User{
+		// 	Username:      admin_username,
+		// 	Email:         admin_email,
+		// 	Password_Hash: pass_hash,
+		// }
 
 		// Only used in production mode. Not in tests nor development mode.
 		sendEmailToAdmin = func(r *http.Request, successfulLogin bool) {
@@ -125,7 +139,8 @@ func main() {
 			}
 		}
 
-		store, closeDB := NewFileSystemStore(dbFile, []Article{}, []User{admin})
+		// store, closeDB := NewFileSystemStore(dbFile, []Article{}, []User{admin})
+		store, closeDB := NewFileSystemStore(dbFile, []Article{}, []User{User{}})
 		defer closeDB()
 		sessStore := NewMemorySessionStore()
 		server = NewServer(store, sessStore)
